@@ -3,15 +3,18 @@
   "services": {
     "admin": {
       "root": "apps/admin",
-      "framework": "vite"
+      "framework": "vite",
+      "buildCommand": "pnpm --filter @eventdesk/contracts build && pnpm run build"
     },
     "scanner": {
       "root": "apps/scanner",
-      "framework": "vite"
+      "framework": "vite",
+      "buildCommand": "pnpm --filter @eventdesk/contracts build && pnpm run build"
     },
     "api": {
       "root": "services/api",
-      "framework": "express"
+      "framework": "express",
+      "buildCommand": "pnpm --filter @eventdesk/contracts build && pnpm run build"
     }
   },
   "rewrites": [
