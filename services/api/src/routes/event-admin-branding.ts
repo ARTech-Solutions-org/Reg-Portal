@@ -7,9 +7,8 @@ import { sendJson } from "../lib/responses.js";
 import { requireOrganizer, requireUuid, type AuthenticatedRequest } from "../middleware/auth.js";
 
 const router = Router();
-router.use(requireOrganizer);
 
-router.get("/:eventId/event-admin-branding", async (req, res, next) => {
+router.get("/:eventId/event-admin-branding", requireOrganizer, async (req, res, next) => {
   if (!requireUuid(req.params.eventId)) { res.status(400).json({ error: "Invalid event ID." }); return; }
   try {
     const organizerId = (req as AuthenticatedRequest).userId!;
@@ -29,7 +28,7 @@ router.get("/:eventId/event-admin-branding", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.put("/:eventId/event-admin-branding", async (req, res, next) => {
+router.put("/:eventId/event-admin-branding", requireOrganizer, async (req, res, next) => {
   if (!requireUuid(req.params.eventId)) { res.status(400).json({ error: "Invalid event ID." }); return; }
   const parsed = eventAdminBrandingSchema.safeParse(req.body);
   if (!parsed.success || !isValidScannerLogoDataUrl(parsed.data?.logoDataUrl ?? null)) {
