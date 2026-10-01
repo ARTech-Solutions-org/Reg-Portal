@@ -14,5 +14,5 @@ export default defineConfig({
       "/scanner": { target: "http://127.0.0.1:3001", changeOrigin: true, ws: true },
     },
   },
-  build: { outDir: "../../dist", emptyOutDir: true, sourcemap: false },
+  build: { outDir: "dist", emptyOutDir: true, sourcemap: false },
 });
