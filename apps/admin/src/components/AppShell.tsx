@@ -50,7 +50,7 @@ export function AppShell() {
           )}
         </div>
         <div className="hidden md:block"><p className="label-caps">Event operations · live workspace</p><p className="mt-1 text-xs text-muted-foreground">A clear view of every arrival.</p></div>
-        <div className="flex items-center gap-3"><span className="hidden items-center gap-2 rounded-full border border-border bg-white px-3 py-1.5 text-[11px] font-medium text-muted-foreground sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />System ready</span><a href="https://help.manus.im" target="_blank" rel="noreferrer" className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-white" aria-label="Help"><CircleHelp className="h-4 w-4" /></a><Button variant="ghost" size="sm" className="md:hidden" onClick={() => void doLogout()}><LogOut className="h-4 w-4" /></Button></div>
+        <div className="flex items-center gap-3"><span className="hidden items-center gap-2 rounded-full border border-border bg-white px-3 py-1.5 text-[11px] font-medium text-muted-foreground sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />System ready</span><Button variant="ghost" size="sm" className="md:hidden" onClick={() => void doLogout()}><LogOut className="h-4 w-4" /></Button></div>
       </header>
       <main className="mx-auto max-w-[1440px] px-5 py-7 md:px-9 md:py-9"><Outlet /></main>
     </div>
