@@ -326,7 +326,7 @@ export function DesignerPage() {
         }
       }
       const bytes = await pdf.save();
-      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      const url = URL.createObjectURL(new Blob([bytes as unknown as BlobPart], { type: "application/pdf" }));
       const anchor = document.createElement("a");
       anchor.href = url;
       anchor.download = `${attendee ? attendee.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() : "eventdesk-badge-preview"}.pdf`;
