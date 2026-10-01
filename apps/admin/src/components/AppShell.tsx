@@ -6,7 +6,6 @@ import { useAuth } from "@/components/AuthProvider";
 import { useEventBranding } from "@/hooks/useEventBranding";
 import { cn } from "@/lib/cn";
 
-const mainNav = [{ to: "/admin", label: "Overview", icon: LayoutDashboard }];
 
 export function AppShell() {
   const { user, logout } = useAuth();
@@ -28,8 +27,7 @@ export function AppShell() {
       </div>
       <div className="px-4">
         <p className="label-caps px-3 pb-2 text-white/40">Workspace</p>
-        {mainNav.map((item) => <NavLink key={item.to} to={item.to} end className={({ isActive }) => cn("mb-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors", isActive ? "bg-white/10 text-white" : "text-white/65 hover:bg-white/5 hover:text-white")}><item.icon className="h-4 w-4" />{item.label}</NavLink>)}
-        <NavLink to="/admin" className={({ isActive }) => cn("mb-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors", location.pathname.startsWith("/admin/projects") ? "bg-white/10 text-white" : "text-white/65 hover:bg-white/5 hover:text-white")}><TicketCheck className="h-4 w-4" />Projects & events</NavLink>
+        <NavLink to="/admin" className={() => cn("mb-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors", location.pathname === "/admin" || location.pathname.startsWith("/admin/projects") ? "bg-white/10 text-white" : "text-white/65 hover:bg-white/5 hover:text-white")}><TicketCheck className="h-4 w-4" />Projects & events</NavLink>
       </div>
       {isEvent && <div className="mt-6 px-4">
         <p className="label-caps px-3 pb-2 text-white/40">Selected event</p>
