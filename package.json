@@ -1,0 +1,28 @@
+{
+  "name": "@eventdesk/workspace",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@10.26.1",
+  "scripts": {
+    "dev": "pnpm --filter @eventdesk/contracts build && concurrently --kill-others-on-fail -n api,scanner,admin -c blue,magenta,green \"pnpm --filter @eventdesk/api dev\" \"pnpm --filter @eventdesk/scanner dev\" \"pnpm --filter @eventdesk/admin dev\"",
+    "dev:api": "pnpm --filter @eventdesk/contracts build && pnpm --filter @eventdesk/api dev",
+    "dev:admin": "pnpm --filter @eventdesk/admin dev",
+    "dev:scanner": "pnpm --filter @eventdesk/scanner dev",
+    "build:web": "pnpm --filter @eventdesk/contracts build && pnpm --filter @eventdesk/admin build && pnpm --filter @eventdesk/scanner build",
+    "build:api": "pnpm --filter @eventdesk/contracts build && pnpm --filter @eventdesk/api build",
+    "build": "pnpm build:web && pnpm build:api",
+    "typecheck": "pnpm --filter @eventdesk/contracts build && pnpm --filter @eventdesk/contracts typecheck && pnpm --filter @eventdesk/api typecheck && pnpm --filter @eventdesk/admin typecheck && pnpm --filter @eventdesk/scanner typecheck",
+    "test": "pnpm --filter @eventdesk/contracts build && pnpm --filter @eventdesk/api test",
+    "db:migrate": "pnpm --filter @eventdesk/api db:migrate",
+    "db:repair-tenants": "pnpm --filter @eventdesk/api db:repair-tenants",
+    "db:smoke": "pnpm --filter @eventdesk/api db:smoke"
+  },
+  "devDependencies": {
+    "concurrently": "9.1.2",
+    "typescript": "5.7.3"
+  }
+}

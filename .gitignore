@@ -1,0 +1,36 @@
+node_modules/
+**/node_modules/
+*.log
+.env
+.env.*
+!.env.example
+dist/
+**/dist/
+coverage/
+.DS_Store
+
+# Vercel
+.vercel/
+
+# TypeScript
+*.tsbuildinfo
+
+# pnpm
+.pnpm-debug.log*
+
+# Vite
+.vite/
+**/dist-tsc/
+
+# Editor / IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

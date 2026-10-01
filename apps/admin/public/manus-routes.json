@@ -1,0 +1,15 @@
+{
+  "routes": [
+    { "path": "/", "title": "Event operations" },
+    { "path": "/login", "title": "Organizer sign in" },
+    { "path": "/admin", "title": "Dashboard and projects" },
+    { "path": "/admin/projects/:projectId", "title": "Project events" },
+    { "path": "/admin/events/:eventId", "title": "Event overview" },
+    { "path": "/admin/events/:eventId/attendees", "title": "Attendees" },
+    { "path": "/admin/events/:eventId/analytics", "title": "Check-in analytics" },
+    { "path": "/admin/events/:eventId/links", "title": "Scanner links" },
+    { "path": "/admin/events/:eventId/scanner-branding", "title": "Scanner design" },
+    { "path": "/admin/events/:eventId/designer", "title": "Badge designer" },
+    { "path": "/scanner/:eventId", "title": "Event check-in scanner" }
+  ]
+}

@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --background: 210 24% 97%;
+  --foreground: 218 27% 17%;
+  --card: 0 0% 100%;
+  --card-foreground: 218 27% 17%;
+  --primary: 220 77% 53%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 214 31% 94%;
+  --secondary-foreground: 218 27% 23%;
+  --muted: 216 24% 94%;
+  --muted-foreground: 215 12% 48%;
+  --accent: 218 88% 96%;
+  --accent-foreground: 220 77% 40%;
+  --destructive: 0 72% 53%;
+  --border: 216 22% 89%;
+  --input: 216 22% 86%;
+  --ring: 220 77% 53%;
+  --sidebar: 222 31% 14%;
+  --sidebar-foreground: 218 24% 92%;
+}
+
+* { box-sizing: border-box; }
+html { min-width: 320px; background: hsl(var(--background)); }
+body { margin: 0; min-height: 100vh; color: hsl(var(--foreground)); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-feature-settings: "ss01" on; }
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+::selection { background: hsl(var(--primary) / .16); }
+
+@layer components {
+  .page-enter { animation: enter .24s ease-out both; }
+  .surface-grid { background-image: radial-gradient(hsl(var(--border) / .48) .75px, transparent .75px); background-size: 22px 22px; }
+  .label-caps { @apply text-[10px] font-semibold uppercase tracking-[.17em] text-muted-foreground; }
+  .input-control { @apply h-11 w-full rounded-xl border border-input bg-white px-3.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-primary focus:ring-4 focus:ring-primary/10; }
+  .panel-title { @apply font-display text-lg font-semibold tracking-tight; }
+  .mono-label { @apply font-mono text-[11px] tracking-wide text-muted-foreground; }
+}
+
+@keyframes enter { from { opacity: .4; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }

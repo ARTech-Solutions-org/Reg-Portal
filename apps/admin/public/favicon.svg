@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Eventdesk gate mark">
+  <rect width="512" height="512" fill="#3568E8"/>
+  <path fill="#FFFFFF" fill-rule="evenodd" d="M104 72h304v368H104z M184 152h144v288H184z"/>
+  <path fill="#F6C967" d="M218 218h76v76h-76z"/>
+  <path fill="#3568E8" d="M232 232h20v20h-20z M260 232h20v20h-20z M232 260h20v20h-20z M260 260h20v20h-20z"/>
+</svg>
