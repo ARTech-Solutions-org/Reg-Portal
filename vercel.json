@@ -1,40 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "services": {
-    "admin": {
-      "root": "apps/admin",
-      "framework": "vite",
-      "buildCommand": "pnpm --filter @eventdesk/contracts build && pnpm run build"
-    },
-    "scanner": {
-      "root": "apps/scanner",
-      "framework": "vite",
-      "buildCommand": "pnpm --filter @eventdesk/contracts build && pnpm run build"
-    },
-    "api": {
-      "root": "services/api",
-      "framework": "express",
-      "buildCommand": "pnpm --filter @eventdesk/contracts build && pnpm run build"
-    }
-  },
+  "buildCommand": "pnpm --filter @eventdesk/contracts build && pnpm --filter @eventdesk/admin build && pnpm --filter @eventdesk/scanner build && pnpm --filter @eventdesk/api build",
+  "outputDirectory": "apps/admin/dist",
   "rewrites": [
-    {
-      "source": "/scanner/(.*)",
-      "destination": {
-        "service": "scanner"
-      }
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": {
-        "service": "api"
-      }
-    },
-    {
-      "source": "/(.*)",
-      "destination": {
-        "service": "admin"
-      }
-    }
+    { "source": "/api/:path*", "destination": "/api/index.js" },
+    { "source": "/scanner/:path*", "destination": "/scanner/index.html" },
+    { "source": "/((?!api|scanner|_next).*)", "destination": "/index.html" }
   ]
 }
