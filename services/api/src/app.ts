@@ -38,21 +38,6 @@ app.use(express.json({ limit: "4mb" }));
 app.use(cookieParser());
 app.use("/api", (_req, res, next) => { res.setHeader("Cache-Control", "private, no-store"); next(); });
 
-const scannerDist = process.env.SCANNER_DIST_DIR ?? resolve(process.cwd(), "dist/scanner");
-app.use("/scanner", express.static(scannerDist, {
-  index: false,
-  setHeaders(res, filePath) {
-    res.setHeader("Cache-Control", filePath.includes(`${process.platform === "win32" ? "\\" : "/"}assets${process.platform === "win32" ? "\\" : "/"}`)
-      ? "public, max-age=31536000, immutable" : "public, max-age=0, must-revalidate");
-  },
-}));
-const sendScannerApp = (_req: express.Request, res: express.Response, next: express.NextFunction) =>
-  res.sendFile(resolve(scannerDist, "index.html"), (error) => { if (error) next(error); });
-app.get(/^\/scanner\/?$/, sendScannerApp);
-app.get(/^\/scanner\/.*$/, (req, res, next) => {
-  if (extname(req.path)) { res.status(404).json({ error: "Scanner asset not found." }); return; }
-  sendScannerApp(req, res, next);
-});
 
 app.get("/api/health", async (_req, res) => {
   try { await pool.query("SELECT 1"); return sendJson(res, healthResponseSchema, { ok: true, service: "eventdesk-api", database: "connected" }); }

@@ -1,10 +1,37 @@
 {
-  "version": 2,
-  "buildCommand": "pnpm build",
-  "outputDirectory": "dist",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "admin": {
+      "root": "apps/admin",
+      "framework": "vite"
+    },
+    "scanner": {
+      "root": "apps/scanner",
+      "framework": "vite"
+    },
+    "api": {
+      "root": "services/api",
+      "framework": "express"
+    }
+  },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index" },
-    { "source": "/scanner/(.*)", "destination": "/scanner/index.html" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/scanner/(.*)",
+      "destination": {
+        "service": "scanner"
+      }
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": {
+        "service": "api"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "admin"
+      }
+    }
   ]
 }

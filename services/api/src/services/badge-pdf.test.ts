@@ -22,9 +22,9 @@ describe("designed attendee badge PDF renderer", () => {
     source.addPage([612, 792]);
     const output = await buildBadgePdf({
       layout,
-      attendee,
+      attendees: [attendee],
       eventName: "Product Summit",
-      qrToken: "opaque-private-qr-token-123456",
+      qrTokens: ["opaque-private-qr-token-123456"],
       templateBytes: await source.save(),
     });
     const rendered = await PDFDocument.load(output);
@@ -35,7 +35,7 @@ describe("designed attendee badge PDF renderer", () => {
   });
 
   it("creates a blank designed badge when no base PDF is configured", async () => {
-    const output = await buildBadgePdf({ layout: { ...layout, pageIndex: 0 }, attendee, eventName: "Product Summit", qrToken: "opaque-private-qr-token-123456" });
+    const output = await buildBadgePdf({ layout: { ...layout, pageIndex: 0 }, attendees: [attendee], eventName: "Product Summit", qrTokens: ["opaque-private-qr-token-123456"] });
     const rendered = await PDFDocument.load(output);
 
     expect(rendered.getPageCount()).toBe(1);

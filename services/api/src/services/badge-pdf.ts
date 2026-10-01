@@ -11,9 +11,9 @@ export interface BadgePdfAttendee {
 
 export interface BadgePdfOptions {
   layout: BadgeLayout;
-  attendee: BadgePdfAttendee;
+  attendees: BadgePdfAttendee[];
   eventName: string;
-  qrToken: string;
+  qrTokens: string[];
   templateBytes?: Uint8Array;
 }
 
@@ -37,59 +37,79 @@ function imageFromDataUrl(dataUrl: string): { bytes: Uint8Array; format: "png" |
   return { bytes: Buffer.from(match[2]!, "base64"), format: match[1] === "png" ? "png" : "jpg" };
 }
 
-export async function buildBadgePdf({ layout, attendee, eventName, qrToken, templateBytes }: BadgePdfOptions): Promise<Uint8Array> {
-  const pdf = templateBytes ? await PDFDocument.load(templateBytes) : await PDFDocument.create();
-  if (!templateBytes) pdf.addPage([layout.pageWidth, layout.pageHeight]);
-  const pages = pdf.getPages();
-  if (!pages.length) throw new Error("The saved badge template does not contain a PDF page.");
-  const page = pages[Math.min(layout.pageIndex, pages.length - 1)]!;
-  const width = page.getWidth();
-  const height = page.getHeight();
-  const qrBytes = await QRCode.toBuffer(qrToken, {
-    errorCorrectionLevel: "M",
-    margin: 1,
-    width: 400,
-    color: { dark: "#132035", light: "#FFFFFF" },
-  });
-  const qrImage = await pdf.embedPng(qrBytes);
+export async function buildBadgePdf({ layout, attendees, eventName, qrTokens, templateBytes }: BadgePdfOptions): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  let templatePdf: PDFDocument | undefined;
+  let templatePageIndex = 0;
+  
+  if (templateBytes) {
+    templatePdf = await PDFDocument.load(templateBytes);
+    const pages = templatePdf.getPages();
+    if (!pages.length) throw new Error("The saved badge template does not contain a PDF page.");
+    templatePageIndex = Math.min(layout.pageIndex, pages.length - 1);
+  }
+
   let font: Awaited<ReturnType<typeof pdf.embedFont>> | undefined;
 
-  for (const element of layout.elements) {
-    const x = element.x * width;
-    const y = height - (element.y + element.height) * height;
-    const drawWidth = element.width * width;
-    const drawHeight = element.height * height;
-    if (element.kind === "qr") {
-      page.drawImage(qrImage, { x, y, width: drawWidth, height: drawHeight });
-      continue;
-    }
-    if (element.kind === "image") {
-      if (!element.imageDataUrl) continue;
-      const image = imageFromDataUrl(element.imageDataUrl);
-      const embedded = image.format === "jpg" ? await pdf.embedJpg(image.bytes) : await pdf.embedPng(image.bytes);
-      page.drawImage(embedded, { x, y, width: drawWidth, height: drawHeight });
-      continue;
+  for (let i = 0; i < attendees.length; i++) {
+    const attendee = attendees[i]!;
+    const qrToken = qrTokens[i]!;
+    
+    let page;
+    if (templatePdf) {
+      const [copiedPage] = await pdf.copyPages(templatePdf, [templatePageIndex]);
+      page = pdf.addPage(copiedPage!);
+    } else {
+      page = pdf.addPage([layout.pageWidth, layout.pageHeight]);
     }
 
-    const content = valueForField(element, attendee, eventName);
-    if (!content) continue;
-    font ??= await pdf.embedFont(StandardFonts.Helvetica);
-    const color = element.color ?? "#132035";
-    const pdfColor = rgb(
-      Number.parseInt(color.slice(1, 3), 16) / 255,
-      Number.parseInt(color.slice(3, 5), 16) / 255,
-      Number.parseInt(color.slice(5, 7), 16) / 255,
-    );
-    const fontSize = element.fontSize ?? 16;
-    page.drawText(content, {
-      x,
-      y: y + Math.max(0, drawHeight - fontSize),
-      size: fontSize,
-      font,
-      color: pdfColor,
-      maxWidth: drawWidth,
-      lineHeight: fontSize * 1.2,
+    const width = page.getWidth();
+    const height = page.getHeight();
+    const qrBytes = await QRCode.toBuffer(qrToken, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 400,
+      color: { dark: "#132035", light: "#FFFFFF" },
     });
+    const qrImage = await pdf.embedPng(qrBytes);
+
+    for (const element of layout.elements) {
+      const x = element.x * width;
+      const y = height - (element.y + element.height) * height;
+      const drawWidth = element.width * width;
+      const drawHeight = element.height * height;
+      if (element.kind === "qr") {
+        page.drawImage(qrImage, { x, y, width: drawWidth, height: drawHeight });
+        continue;
+      }
+      if (element.kind === "image") {
+        if (!element.imageDataUrl) continue;
+        const image = imageFromDataUrl(element.imageDataUrl);
+        const embedded = image.format === "jpg" ? await pdf.embedJpg(image.bytes) : await pdf.embedPng(image.bytes);
+        page.drawImage(embedded, { x, y, width: drawWidth, height: drawHeight });
+        continue;
+      }
+
+      const content = valueForField(element, attendee, eventName);
+      if (!content) continue;
+      font ??= await pdf.embedFont(StandardFonts.Helvetica);
+      const color = element.color ?? "#132035";
+      const pdfColor = rgb(
+        Number.parseInt(color.slice(1, 3), 16) / 255,
+        Number.parseInt(color.slice(3, 5), 16) / 255,
+        Number.parseInt(color.slice(5, 7), 16) / 255,
+      );
+      const fontSize = element.fontSize ?? 16;
+      page.drawText(content, {
+        x,
+        y: y + Math.max(0, drawHeight - fontSize),
+        size: fontSize,
+        font,
+        color: pdfColor,
+        maxWidth: drawWidth,
+        lineHeight: fontSize * 1.2,
+      });
+    }
   }
 
   return pdf.save();
