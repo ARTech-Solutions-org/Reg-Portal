@@ -50,9 +50,10 @@ app.use("/api/events", scannerSessionRouter);
 app.use("/api/events", scannerBrandingRouter);
 // These staff-token routes must run before the organizer-only event/attendee routers below.
 app.use("/api/events", checkinsRouter);
+// Dashboard must be before eventsRouter/attendeesRouter since it has a public route (/public/share)
+app.use("/api/events", dashboardRouter);
 app.use("/api/events", eventsRouter);
 app.use("/api/events", attendeesRouter);
-app.use("/api/events", dashboardRouter);
 app.use("/api/events", scannerLinksRouter);
 app.use("/api/events", layoutsRouter);
 app.use("/api/events", badgeTemplatesRouter);
