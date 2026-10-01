@@ -1,11 +1,3 @@
-let appHandler;
-try {
-  const mod = await import("../src/app.js");
-  appHandler = mod.default;
-} catch (error) {
-  appHandler = (req, res) => {
-    res.status(500).json({ error: "Boot error", details: error.message, stack: error.stack });
-  };
+export default function handler(req, res) {
+  res.status(200).send("API is alive. Env NEON_DATABASE_URL=" + !!process.env.NEON_DATABASE_URL);
 }
-
-export default appHandler;
