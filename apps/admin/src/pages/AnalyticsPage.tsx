@@ -16,7 +16,7 @@ export function AnalyticsPage() {
   
   const handleShare = async () => {
     try {
-      const res = await api(`/${eventId}/share-link`, { method: "POST" }) as { token: string };
+      const res = await api(`/events/${eventId}/share-link`, { method: "POST" }) as { token: string };
       setShareUrl(`${window.location.origin}/share/${res.token}`);
     } catch (e) {
       console.error(e);
