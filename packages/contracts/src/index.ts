@@ -344,7 +344,7 @@ export const eventRegistrationSettingsSchema = z.object({
   scanMode: scanModeSchema.default("checkin_only"),
   title: z.string().trim().max(160).default(""),
   description: z.string().trim().max(1000).default(""),
-  successMessage: z.string().trim().max(500).default("تم تسجيلك بنجاح!"),
+  successMessage: z.string().trim().max(500).default("Registration successful!"),
   fields: z.array(registrationFieldSchema).max(30).default([]),
 }).strict();
 
@@ -356,7 +356,7 @@ export const defaultEventRegistrationSettings: z.infer<typeof eventRegistrationS
   scanMode: "checkin_only",
   title: "",
   description: "",
-  successMessage: "تم تسجيل بياناتك بنجاح! نراكم قريباً في الفعالية.",
+  successMessage: "Your registration was successful! We look forward to seeing you at the event.",
   fields: [],
 };
 

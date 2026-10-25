@@ -229,7 +229,7 @@ router.post("/:eventId/public-registration", async (req, res, next) => {
       const currentDeviceCount = devCheck.rows[0]?.count ?? 0;
       if (currentDeviceCount >= settings.maxRegistrationsPerDevice) {
         res.status(403).json({
-          error: `تم استنفاد الحد الأقصى للتسجيل من هذا الجهاز (${settings.maxRegistrationsPerDevice} ${settings.maxRegistrationsPerDevice === 1 ? "مرة واحدة فقط" : "مرات"}).`,
+          error: `Maximum registration limit reached for this device (${settings.maxRegistrationsPerDevice} ${settings.maxRegistrationsPerDevice === 1 ? "submission" : "submissions"}).`,
         });
         return;
       }
@@ -240,7 +240,7 @@ router.post("/:eventId/public-registration", async (req, res, next) => {
       if (field.required) {
         const val = parsed.data.customFields[field.key];
         if (!val || val.trim().length === 0) {
-          res.status(400).json({ error: `حقل "${field.label}" مطلوب.` });
+          res.status(400).json({ error: `Field "${field.label}" is required.` });
           return;
         }
       }
@@ -297,7 +297,7 @@ router.post("/:eventId/public-registration", async (req, res, next) => {
     res.setHeader("Cache-Control", "private, no-store");
     return sendJson(res, publicRegistrationResultSchema, {
       success: true,
-      message: settings.successMessage.trim() || "تم تسجيل بياناتك بنجاح!",
+      message: settings.successMessage.trim() || "Registration completed successfully!",
       attendee: {
         id: attendeeRow.id,
         name: attendeeRow.name,

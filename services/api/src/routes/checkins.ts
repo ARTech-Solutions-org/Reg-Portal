@@ -87,7 +87,7 @@ router.post("/:eventId/check-ins", async (req, res, next) => {
         res.setHeader("Cache-Control", "private, no-store");
         const msg = maxScans === 1
           ? `${attendee.name} has already checked in.`
-          : `تم استنفاد الحد الأقصى لمرات المسح المسموح بها لهذا الرمز (${currentScans} من ${maxScans}).`;
+          : `Maximum scan limit reached for ${attendee.name} (${currentScans} of ${maxScans} scans used).`;
         return sendJson(res, checkInResultSchema, {
           status: "duplicate",
           message: msg,
@@ -165,11 +165,11 @@ router.post("/:eventId/check-ins", async (req, res, next) => {
       let successMessage = "";
       if (scanMode === "checkin_checkout") {
         successMessage = targetDirection === "in"
-          ? `تم تسجيل حضور: ${attendee.name} (دخول)`
-          : `تم تسجيل انصراف: ${attendee.name} (خروج)`;
+          ? `Check-in recorded: ${attendee.name} (Entrance)`
+          : `Check-out recorded: ${attendee.name} (Exit)`;
       } else {
         successMessage = maxScans > 1
-          ? `تم تسجيل حضور: ${attendee.name} (مسحة ${newScanCount} من ${maxScans})`
+          ? `Check-in recorded: ${attendee.name} (Scan ${newScanCount} of ${maxScans})`
           : `${attendee.name} checked in.`;
       }
 

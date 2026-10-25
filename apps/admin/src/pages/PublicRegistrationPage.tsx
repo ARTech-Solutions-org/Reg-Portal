@@ -1,20 +1,18 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Calendar,
-  CheckCircle2,
-  Download,
   MapPin,
-  Printer,
-  QrCode,
-  RotateCcw,
-  Sparkles,
-  UserCheck,
+  CheckCircle2,
   AlertCircle,
+  QrCode,
+  Download,
+  Printer,
+  RotateCcw,
+  UserCheck,
 } from "lucide-react";
 import {
-  contractJson,
   publicEventRegistrationInfoSchema,
   publicRegistrationInputSchema,
   publicRegistrationResultSchema,
@@ -22,12 +20,26 @@ import {
   type PublicRegistrationResult,
 } from "@eventdesk/contracts";
 import { apiContract, ApiError } from "@/lib/api";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-export function PublicRegistrationPage() {
-  const { eventId = "" } = useParams();
+const getDeviceId = (eventId: string): string => {
+  const storageKey = `eventdesk:devid:${eventId}`;
+  let id = localStorage.getItem(storageKey);
+  if (!id) {
+    id = "dev_" + Math.random().toString(36).substring(2, 12) + "_" + Date.now().toString(36);
+    try {
+      localStorage.setItem(storageKey, id);
+    } catch {
+      /* Ignore storage errors */
+    }
+  }
+  return id;
+};
+
+export default function PublicRegistrationPage() {
+  const { eventId = "" } = useParams<{ eventId: string }>();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -35,48 +47,48 @@ export function PublicRegistrationPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [registrationResult, setRegistrationResult] = useState<PublicRegistrationResult | null>(null);
 
-  const getDeviceId = () => {
-    try {
-      let id = localStorage.getItem("eventdesk_device_id");
-      if (!id) {
-        id = "dev_" + Math.random().toString(36).substring(2, 9) + "_" + Date.now().toString(36);
-        localStorage.setItem("eventdesk_device_id", id);
-      }
-      return id;
-    } catch {
-      return "client_dev";
-    }
-  };
-
-  const localKey = `eventdesk_event_reg_${eventId}`;
+  // Local device registration counter
+  const localKey = `eventdesk:reg_count:${eventId}`;
   const [localRegCount, setLocalRegCount] = useState<number>(() => {
     try {
-      return Number(localStorage.getItem(`eventdesk_event_reg_${eventId}`) || 0);
+      return parseInt(localStorage.getItem(localKey) || "0", 10) || 0;
     } catch {
       return 0;
     }
   });
 
-  const { data: info, isLoading, error } = useQuery<PublicEventRegistrationInfo>({
+  const deviceId = getDeviceId(eventId);
+
+  const {
+    data: info,
+    isLoading,
+    error,
+  } = useQuery<PublicEventRegistrationInfo>({
     queryKey: ["public-registration-info", eventId],
-    queryFn: () => apiContract(`/events/${eventId}/public-registration`, publicEventRegistrationInfoSchema),
+    queryFn: () =>
+      apiContract(
+        `/events/${eventId}/public-registration`,
+        publicEventRegistrationInfoSchema,
+      ),
     enabled: Boolean(eventId),
+    retry: 1,
   });
 
   const isDeviceLimitReached = Boolean(
-    info && info.maxRegistrationsPerDevice > 0 && localRegCount >= info.maxRegistrationsPerDevice
+    info &&
+      info.maxRegistrationsPerDevice > 0 &&
+      localRegCount >= info.maxRegistrationsPerDevice,
   );
 
   const registerMutation = useMutation({
-    mutationFn: (values: { name: string; email: string; customFields: Record<string, string> }) =>
+    mutationFn: (data: { name: string; email: string; customFields: Record<string, string> }) =>
       apiContract(`/events/${eventId}/public-registration`, publicRegistrationResultSchema, {
         method: "POST",
-        body: contractJson(publicRegistrationInputSchema, {
-          name: values.name,
-          email: values.email,
-          ticketType: "General",
-          customFields: values.customFields,
-          deviceId: getDeviceId(),
+        body: JSON.stringify({
+          name: data.name,
+          email: data.email || undefined,
+          customFields: data.customFields,
+          deviceId,
         }),
       }),
     onSuccess: (result) => {
@@ -88,7 +100,7 @@ export function PublicRegistrationPage() {
       setRegistrationResult(result);
     },
     onError: (err) => {
-      alert(err instanceof ApiError ? err.message : "تعذر إتمام التسجيل، يرجى المحاولة مرة أخرى.");
+      alert(err instanceof ApiError ? err.message : "Unable to complete registration. Please try again.");
     },
   });
 
@@ -108,7 +120,7 @@ export function PublicRegistrationPage() {
     const errors: Record<string, string> = {};
 
     if (!name.trim()) {
-      errors.name = "يرجى إدخال الاسم بالكامل.";
+      errors.name = "Please enter your full name.";
     }
 
     if (info?.fields) {
@@ -116,7 +128,7 @@ export function PublicRegistrationPage() {
         if (field.required) {
           const val = customFields[field.key]?.trim();
           if (!val) {
-            errors[field.key] = `حقل "${field.label}" مطلوب.`;
+            errors[field.key] = `Field "${field.label}" is required.`;
           }
         }
       }
@@ -152,7 +164,7 @@ export function PublicRegistrationPage() {
   };
 
   const formattedDate = info?.startsAt
-    ? new Intl.DateTimeFormat("ar-EG", {
+    ? new Intl.DateTimeFormat("en-US", {
         weekday: "long",
         year: "numeric",
         month: "long",
@@ -167,7 +179,7 @@ export function PublicRegistrationPage() {
       <div className="grid min-h-screen place-items-center bg-background p-6">
         <div className="text-center space-y-3">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">جاري تحميل صفحة التسجيل…</p>
+          <p className="text-sm text-muted-foreground">Loading registration page…</p>
         </div>
       </div>
     );
@@ -180,9 +192,9 @@ export function PublicRegistrationPage() {
           <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-destructive/10 text-destructive">
             <AlertCircle className="h-6 w-6" />
           </div>
-          <h1 className="font-display text-2xl font-bold">الفعالية غير متوفرة</h1>
+          <h1 className="font-display text-2xl font-bold">Event Not Found</h1>
           <p className="text-sm text-muted-foreground">
-            تأكد من صحة الرابط أو تواصل مع منظمي الفعالية.
+            Please verify the link address or contact the event organizer.
           </p>
         </div>
       </div>
@@ -196,9 +208,9 @@ export function PublicRegistrationPage() {
           <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-amber-500/10 text-amber-600">
             <AlertCircle className="h-6 w-6" />
           </div>
-          <h1 className="font-display text-2xl font-bold">التسجيل مغلق حالياً</h1>
+          <h1 className="font-display text-2xl font-bold">Registration is Closed</h1>
           <p className="text-sm text-muted-foreground">
-            تم إيقاف التسجيل في هذه الفعالية ({info.eventName}). يرجى التواصل مع إدارة الفعالية للمزيد من التفاصيل.
+            Registration for {info.eventName} has ended. Please contact the organizers for more information.
           </p>
         </div>
       </div>
@@ -219,7 +231,7 @@ export function PublicRegistrationPage() {
               />
             )}
             <Badge tone="default" className="text-xs uppercase tracking-wider text-primary border border-primary/20 bg-primary/[0.04]">
-              تسجيل حضور الفعالية
+              Event Registration
             </Badge>
             <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
               {info.title.trim() || info.eventName}
@@ -259,7 +271,7 @@ export function PublicRegistrationPage() {
 
             <div className="space-y-2">
               <h2 className="font-display text-2xl font-bold text-foreground">
-                تم استلام طلب التسجيل بنجاح!
+                Registration Successful!
               </h2>
               <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
                 {registrationResult.message}
@@ -269,17 +281,17 @@ export function PublicRegistrationPage() {
             {/* Attendee Details Card */}
             <div className="mx-auto max-w-sm rounded-xl border border-border bg-muted/30 p-4 text-sm text-start space-y-2">
               <div className="flex justify-between items-center border-b border-border/60 pb-2">
-                <span className="text-xs text-muted-foreground">الاسم:</span>
+                <span className="text-xs text-muted-foreground">Full Name:</span>
                 <span className="font-semibold text-foreground">{registrationResult.attendee.name}</span>
               </div>
               {registrationResult.attendee.email && (
                 <div className="flex justify-between items-center border-b border-border/60 pb-2">
-                  <span className="text-xs text-muted-foreground">البريد الإلكتروني:</span>
+                  <span className="text-xs text-muted-foreground">Email:</span>
                   <span className="font-mono text-xs text-foreground">{registrationResult.attendee.email}</span>
                 </div>
               )}
               <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground">نوع التذكرة:</span>
+                <span className="text-xs text-muted-foreground">Ticket:</span>
                 <Badge tone="neutral" className="text-xs font-semibold">{registrationResult.attendee.ticketType}</Badge>
               </div>
             </div>
@@ -289,7 +301,7 @@ export function PublicRegistrationPage() {
               <div className="mx-auto max-w-sm rounded-2xl border-2 border-primary/20 bg-primary/[0.02] p-6 space-y-4 shadow-sm">
                 <div className="flex items-center justify-center gap-2 text-xs font-semibold text-primary">
                   <QrCode className="h-4 w-4" />
-                  <span>رمز الدخول السريع (QR Code)</span>
+                  <span>Entrance Pass (QR Code)</span>
                 </div>
                 <div className="mx-auto grid place-items-center rounded-xl bg-white p-3 shadow-sm border border-border w-fit">
                   <img
@@ -299,35 +311,35 @@ export function PublicRegistrationPage() {
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  يرجى حفظ هذا الرمز أو أخذ لقطة شاشة لإظهاره عند بوابة الفعالية للدخول.
+                  Please save or screenshot this QR code to present at the event entrance for fast check-in.
                 </p>
                 <div className="flex items-center justify-center gap-2 pt-1">
                   <Button onClick={downloadQr} size="sm" className="gap-2">
                     <Download className="h-4 w-4" />
-                    تحميل الرمز
+                    Download QR
                   </Button>
                   <Button onClick={handlePrint} variant="outline" size="sm" className="gap-2">
                     <Printer className="h-4 w-4" />
-                    طباعة
+                    Print
                   </Button>
                 </div>
               </div>
             ) : (
               /* If showQrCode is FALSE */
               <div className="rounded-xl bg-muted/40 p-4 border border-border text-center text-xs text-muted-foreground max-w-md mx-auto">
-                <p>تم تسجيل بياناتك رسمياً في كشف الحضور. سيتم إرشادك عند الوصول للفعالية.</p>
+                <p>Your details have been registered on the guest list. Our team will guide you upon arrival.</p>
               </div>
             )}
 
             <div className="pt-4 border-t border-border">
               {isDeviceLimitReached ? (
                 <p className="text-xs text-muted-foreground text-center">
-                  تم بلوغ الحد الأقصى المسموح به للتسجيل من هذا الجهاز ({info?.maxRegistrationsPerDevice}).
+                  Maximum registration limit reached for this device ({info?.maxRegistrationsPerDevice}).
                 </p>
               ) : (
                 <Button variant="ghost" size="sm" onClick={handleReset} className="gap-2 text-muted-foreground hover:text-foreground">
                   <RotateCcw className="h-4 w-4" />
-                  تسجيل شخص آخر
+                  Register Another Person
                 </Button>
               )}
             </div>
@@ -339,10 +351,10 @@ export function PublicRegistrationPage() {
                 <AlertCircle className="h-6 w-6" />
               </div>
               <h2 className="font-display text-xl font-bold text-foreground">
-                تم استنفاد الحد الأقصى للتسجيل من هذا الجهاز
+                Registration Limit Reached
               </h2>
               <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
-                حدد منظم الفعالية الحد الأقصى للتسجيل من نفس الجهاز بـ ({info.maxRegistrationsPerDevice} {info.maxRegistrationsPerDevice === 1 ? "مرة واحدة" : "مرات"}). لقد قمت بالتسجيل مسبقاً من هذا المتصفح.
+                The event organizer has set a maximum limit of {info.maxRegistrationsPerDevice} {info.maxRegistrationsPerDevice === 1 ? "submission" : "submissions"} from the same device. You have already registered from this browser.
               </p>
             </CardContent>
           </Card>
@@ -351,15 +363,15 @@ export function PublicRegistrationPage() {
           <Card className="rounded-2xl border border-border bg-white dark:bg-card shadow-sm">
             <CardContent className="p-6 sm:p-8 space-y-6">
               <div className="border-b border-border pb-4">
-                <h2 className="font-display text-lg font-semibold text-foreground">بيانات التسجيل</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">يرجى تعبئة الحقول التالية بدقة</p>
+                <h2 className="font-display text-lg font-semibold text-foreground">Registration Details</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Please fill in your details accurately</p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Full Name (Primary Required Field) */}
                 <div>
                   <label className="block text-xs font-semibold text-foreground mb-1.5">
-                    الاسم بالكامل <span className="text-destructive">*</span>
+                    Full Name <span className="text-destructive">*</span>
                   </label>
                   <input
                     type="text"
@@ -369,7 +381,7 @@ export function PublicRegistrationPage() {
                       setName(e.target.value);
                       if (fieldErrors.name) setFieldErrors((p) => ({ ...p, name: "" }));
                     }}
-                    placeholder="مثال: أحمد محمد علي"
+                    placeholder="e.g. John Doe"
                     className={`input-control ${fieldErrors.name ? "border-destructive ring-destructive/10" : ""}`}
                   />
                   {fieldErrors.name && (
@@ -380,7 +392,7 @@ export function PublicRegistrationPage() {
                 {/* Optional Email */}
                 <div>
                   <label className="block text-xs font-semibold text-foreground mb-1.5">
-                    البريد الإلكتروني (اختياري)
+                    Email Address (Optional)
                   </label>
                   <input
                     type="email"
@@ -388,7 +400,6 @@ export function PublicRegistrationPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="name@example.com"
                     className="input-control"
-                    dir="ltr"
                   />
                 </div>
 
@@ -410,7 +421,7 @@ export function PublicRegistrationPage() {
                           className={`input-control ${errorMsg ? "border-destructive ring-destructive/10" : ""}`}
                           required={field.required}
                         >
-                          <option value="">-- اختر خياراً --</option>
+                          <option value="">-- Select an option --</option>
                           {field.options?.map((opt, i) => (
                             <option key={i} value={opt}>
                               {opt}
@@ -422,7 +433,7 @@ export function PublicRegistrationPage() {
                           rows={3}
                           value={value}
                           onChange={(e) => handleCustomFieldChange(field.key, e.target.value)}
-                          placeholder={field.placeholder || `اكتب ${field.label}...`}
+                          placeholder={field.placeholder || `Enter ${field.label}...`}
                           required={field.required}
                           className={`w-full rounded-xl border bg-white p-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-primary focus:ring-4 focus:ring-primary/10 ${
                             errorMsg ? "border-destructive ring-destructive/10" : "border-input"
@@ -441,10 +452,9 @@ export function PublicRegistrationPage() {
                           }
                           value={value}
                           onChange={(e) => handleCustomFieldChange(field.key, e.target.value)}
-                          placeholder={field.placeholder || `أدخل ${field.label}...`}
+                          placeholder={field.placeholder || `Enter ${field.label}...`}
                           required={field.required}
                           className={`input-control ${errorMsg ? "border-destructive ring-destructive/10" : ""}`}
-                          dir={field.type === "phone" || field.type === "email" ? "ltr" : undefined}
                         />
                       )}
 
@@ -462,12 +472,12 @@ export function PublicRegistrationPage() {
                     {registerMutation.isPending ? (
                       <>
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                        <span>جاري إرسال التسجيل…</span>
+                        <span>Submitting registration…</span>
                       </>
                     ) : (
                       <>
                         <UserCheck className="h-4 w-4" />
-                        <span>تأكيد التسجيل</span>
+                        <span>Confirm Registration</span>
                       </>
                     )}
                   </Button>
@@ -479,7 +489,7 @@ export function PublicRegistrationPage() {
 
         <div className="mt-8 text-center text-xs text-muted-foreground">
           <span>Powered by </span>
-          <span className="font-semibold text-foreground">Gatepass / ALMIRA</span>
+          <span className="font-semibold text-foreground">Gatepass</span>
         </div>
       </div>
     </div>

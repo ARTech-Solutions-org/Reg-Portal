@@ -9,7 +9,6 @@ import {
   Eye,
   EyeOff,
   Globe,
-  Link2,
   Plus,
   QrCode,
   Smartphone,
@@ -39,11 +38,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 const PRESET_FIELDS: Array<{ label: string; key: string; type: RegistrationFieldType; placeholder: string }> = [
-  { label: "رقم الهاتف / Phone", key: "phone_number", type: "phone", placeholder: "+20 100 000 0000" },
-  { label: "جهة العمل / Company", key: "company", type: "text", placeholder: "Acme Corp" },
-  { label: "المسمى الوظيفي / Job Title", key: "job_title", type: "text", placeholder: "Software Engineer" },
-  { label: "المدينة / City", key: "city", type: "text", placeholder: "Cairo / Riyadh" },
-  { label: "ملاحظات / Notes", key: "notes", type: "textarea", placeholder: "Any specific requests or requirements..." },
+  { label: "Phone Number", key: "phone_number", type: "phone", placeholder: "+1 (555) 000-0000" },
+  { label: "Company / Organization", key: "company", type: "text", placeholder: "Acme Corp" },
+  { label: "Job Title", key: "job_title", type: "text", placeholder: "Software Engineer" },
+  { label: "City", key: "city", type: "text", placeholder: "New York / London" },
+  { label: "Notes / Special Requests", key: "notes", type: "textarea", placeholder: "Any specific requirements or dietary needs..." },
 ];
 
 export function RegistrationSettingsPage() {
@@ -272,7 +271,7 @@ export function RegistrationSettingsPage() {
       {/* Main Grid: Form Builder & Settings + Mobile Preview */}
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="space-y-6">
-          {/* QR Code Visibility & Registration Options (THE KEY USER REQUIREMENT) */}
+          {/* QR Code Visibility & Registration Options */}
           <Card>
             <CardContent className="p-6 space-y-6">
               <div className="flex items-center gap-3">
@@ -280,8 +279,8 @@ export function RegistrationSettingsPage() {
                   <QrCode className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="panel-title">QR code & registration options</h3>
-                  <p className="text-xs text-muted-foreground">Control attendee QR visibility and registration status</p>
+                  <h3 className="panel-title">QR Code & Registration Controls</h3>
+                  <p className="text-xs text-muted-foreground">Control attendee QR visibility, submission limits, and gate scan modes</p>
                 </div>
               </div>
 
@@ -291,21 +290,21 @@ export function RegistrationSettingsPage() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-foreground">
-                        إظهار رمز الـ QR للمسجل بعد التسجيل
+                        Display QR code to attendee upon registration
                       </span>
                       {settings.showQrCode ? (
                         <Badge tone="success" className="border border-emerald-500/40 text-[10px]">
-                          <Eye className="h-3 w-3 mr-1" /> مفعل
+                          <Eye className="h-3 w-3 mr-1" /> Enabled
                         </Badge>
                       ) : (
                         <Badge tone="warning" className="border border-amber-500/40 text-[10px]">
-                          <EyeOff className="h-3 w-3 mr-1" /> مخفي
+                          <EyeOff className="h-3 w-3 mr-1" /> Hidden
                         </Badge>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      عند التفعيل: يظهر رمز الـ QR مباشرة في شاشة التأكيد للمسجل ليتمكن من حفظه أو تصويره للدخول.<br />
-                      عند الإلغاء: يكتفى برسالة تأكيد نجاح التسجيل فقط دون إظهار رمز الـ QR.
+                      When enabled: The QR code is displayed immediately on the confirmation screen for attendees to save or screenshot.<br />
+                      When disabled: Only a confirmation receipt message is shown without revealing the entrance QR code.
                     </p>
                   </div>
 
@@ -333,19 +332,19 @@ export function RegistrationSettingsPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-foreground">حالة التسجيل (مفتوح / مغلق)</span>
+                      <span className="text-sm font-semibold text-foreground">Registration Status (Open / Closed)</span>
                       {settings.isOpen ? (
                         <Badge tone="success" className="border border-emerald-500/40 text-[10px]">
-                          مفتوح
+                          Open
                         </Badge>
                       ) : (
                         <Badge tone="danger" className="border border-destructive/40 text-[10px]">
-                          مغلق
+                          Closed
                         </Badge>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      يمكنك إيقاف استقبال التسجيلات مؤقتاً عند اكتمال العدد المطلوب.
+                      Temporarily stop accepting submissions when capacity is reached.
                     </p>
                   </div>
 
@@ -373,10 +372,10 @@ export function RegistrationSettingsPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="space-y-0.5">
                     <span className="text-sm font-semibold text-foreground block">
-                      الحد الأقصى للتسجيل من نفس الجهاز
+                      Maximum Submissions Per Device
                     </span>
                     <p className="text-xs text-muted-foreground">
-                      كم مرة يستطيع نفس الجهاز / المتصفح تسجيل بيانات في الفعالية (حماية من التكرار).
+                      How many registrations a single device or browser can submit (protects against duplicate submissions).
                     </p>
                   </div>
                   <select
@@ -384,12 +383,12 @@ export function RegistrationSettingsPage() {
                     value={settings.maxRegistrationsPerDevice}
                     onChange={(e) => setSettings({ ...settings, maxRegistrationsPerDevice: Number(e.target.value) })}
                   >
-                    <option value={1}>مرة واحدة فقط (1)</option>
-                    <option value={2}>مرتان (2)</option>
-                    <option value={3}>3 مرات</option>
-                    <option value={5}>5 مرات</option>
-                    <option value={10}>10 مرات</option>
-                    <option value={0}>غير محدود (Unlimited)</option>
+                    <option value={1}>1 submission (Single)</option>
+                    <option value={2}>2 submissions</option>
+                    <option value={3}>3 submissions</option>
+                    <option value={5}>5 submissions</option>
+                    <option value={10}>10 submissions</option>
+                    <option value={0}>Unlimited</option>
                   </select>
                 </div>
               </div>
@@ -399,10 +398,10 @@ export function RegistrationSettingsPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="space-y-0.5">
                     <span className="text-sm font-semibold text-foreground block">
-                      الحد الأقصى لمرات مسح رمز الـ QR
+                      Maximum QR Scans Per Attendee
                     </span>
                     <p className="text-xs text-muted-foreground">
-                      عدد المرات المسموح فيها بقراءة ومسح رمز الـ QR للشخص عند البوابة.
+                      Maximum number of times an attendee QR code can be scanned at the entrance gate.
                     </p>
                   </div>
                   <select
@@ -410,13 +409,13 @@ export function RegistrationSettingsPage() {
                     value={settings.maxScansPerAttendee}
                     onChange={(e) => setSettings({ ...settings, maxScansPerAttendee: Number(e.target.value) })}
                   >
-                    <option value={1}>مسحة واحدة فقط (1 للدخول)</option>
-                    <option value={2}>مسحتان (2 - دخول وانصراف)</option>
-                    <option value={3}>3 مسحات</option>
-                    <option value={4}>4 مسحات</option>
-                    <option value={5}>5 مسحات</option>
-                    <option value={10}>10 مسحات</option>
-                    <option value={0}>غير محدود (Unlimited)</option>
+                    <option value={1}>1 scan (Entrance only)</option>
+                    <option value={2}>2 scans (Entrance & Exit)</option>
+                    <option value={3}>3 scans</option>
+                    <option value={4}>4 scans</option>
+                    <option value={5}>5 scans</option>
+                    <option value={10}>10 scans</option>
+                    <option value={0}>Unlimited</option>
                   </select>
                 </div>
               </div>
@@ -425,10 +424,10 @@ export function RegistrationSettingsPage() {
               <div className="rounded-xl border border-border bg-background p-4.5 space-y-3">
                 <div className="space-y-0.5">
                   <span className="text-sm font-semibold text-foreground block">
-                    نظام المسح المطلوب عند البوابة
+                    Gate Scanner Mode
                   </span>
                   <p className="text-xs text-muted-foreground">
-                    اختر إذا كان المطلوب تسجيل حضور فقط أو تسجيل حضور وانصراف (دخول وخروج).
+                    Choose whether gate staff only record arrival or track both arrival and departure.
                   </p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 pt-1">
@@ -442,11 +441,11 @@ export function RegistrationSettingsPage() {
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-foreground">حضور فقط (دخول)</span>
+                      <span className="text-xs font-semibold text-foreground">Check-in Only (Entrance)</span>
                       {settings.scanMode === "checkin_only" && <Check className="h-4 w-4 text-primary" />}
                     </div>
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      يُسجل مسح الـ QR تأكيد حضور الضيف للدخول فقط.
+                      QR scans validate and record guest arrival for entrance only.
                     </p>
                   </button>
 
@@ -460,11 +459,11 @@ export function RegistrationSettingsPage() {
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-foreground">حضور وانصراف (دخول وخروج)</span>
+                      <span className="text-xs font-semibold text-foreground">Check-in & Check-out (Entrance & Exit)</span>
                       {settings.scanMode === "checkin_checkout" && <Check className="h-4 w-4 text-primary" />}
                     </div>
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      يتتبع الدخول والخروج (تبديل تلقائي: حضور ثم انصراف) لمتابعة المتواجدين الفعليين.
+                      Tracks both entry and exit (auto-toggles between in and out) to monitor live venue occupancy.
                     </p>
                   </button>
                 </div>
@@ -473,7 +472,7 @@ export function RegistrationSettingsPage() {
               {/* Custom Messages */}
               <div className="space-y-4 pt-2 border-t border-border">
                 <label className="block">
-                  <span className="label-caps mb-1.5 block">عنوان نموذج التسجيل (اختياري)</span>
+                  <span className="label-caps mb-1.5 block">Registration Form Title (Optional)</span>
                   <input
                     className="input-control"
                     value={settings.title}
@@ -483,7 +482,7 @@ export function RegistrationSettingsPage() {
                 </label>
 
                 <label className="block">
-                  <span className="label-caps mb-1.5 block">رسالة ترحيبية / وصف الفعالية</span>
+                  <span className="label-caps mb-1.5 block">Welcome Message / Event Description</span>
                   <textarea
                     rows={2}
                     className="w-full rounded-xl border border-input bg-white p-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-primary focus:ring-4 focus:ring-primary/10"
@@ -494,29 +493,29 @@ export function RegistrationSettingsPage() {
                 </label>
 
                 <label className="block">
-                  <span className="label-caps mb-1.5 block">رسالة نجاح التسجيل (تظهر بعد إرسال البيانات)</span>
+                  <span className="label-caps mb-1.5 block">Success Message (Shown after submission)</span>
                   <input
                     className="input-control"
                     value={settings.successMessage}
                     onChange={(e) => setSettings({ ...settings, successMessage: e.target.value })}
-                    placeholder="تم تسجيل بياناتك بنجاح! نراكم قريباً في الفعالية."
+                    placeholder="Your registration was successful! We look forward to seeing you at the event."
                   />
                 </label>
               </div>
             </CardContent>
           </Card>
 
-          {/* Form Fields Builder ("الادمن يضيف الحاجات الي هو عايزها") */}
+          {/* Form Fields Builder */}
           <Card>
             <CardContent className="p-6 space-y-6">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h3 className="panel-title">حقول نموذج التسجيل</h3>
-                  <p className="text-xs text-muted-foreground">أضف الحقول والبيانات التي تريد من المسجل تعبئتها</p>
+                  <h3 className="panel-title">Registration Form Fields</h3>
+                  <p className="text-xs text-muted-foreground">Add and configure custom fields for attendees to complete</p>
                 </div>
                 <Button size="sm" onClick={() => setShowAddForm(true)} className="gap-1.5 self-start sm:self-auto">
                   <Plus className="h-4 w-4" />
-                  إضافة حقل جديد
+                  Add Custom Field
                 </Button>
               </div>
 
@@ -524,7 +523,7 @@ export function RegistrationSettingsPage() {
               <div className="rounded-xl bg-accent/40 border border-accent p-3.5 space-y-2">
                 <span className="text-[11px] font-semibold text-primary flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5" />
-                  حقول سريعة مقترحة (اضغط للإضافة مباشرة):
+                  Quick Presets (Click to add):
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {PRESET_FIELDS.map((preset) => (
@@ -545,8 +544,8 @@ export function RegistrationSettingsPage() {
               {/* Standard Base Fields Notice */}
               <div className="rounded-xl border border-dashed border-border p-3.5 bg-muted/30">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">الاسم بالكامل (Full Name)</span>
-                  <Badge tone="neutral" className="text-[10px]">حقل أساسي إجباري</Badge>
+                  <span className="font-medium text-foreground">Full Name</span>
+                  <Badge tone="neutral" className="text-[10px]">Required Core Field</Badge>
                 </div>
               </div>
 
@@ -554,9 +553,9 @@ export function RegistrationSettingsPage() {
               <div className="space-y-3">
                 {settings.fields.length === 0 ? (
                   <div className="p-8 text-center border rounded-xl border-dashed border-border">
-                    <p className="text-sm font-medium text-muted-foreground">لم يتم إضافة حقول إضافية بعد</p>
+                    <p className="text-sm font-medium text-muted-foreground">No custom fields added yet</p>
                     <p className="text-xs text-muted-foreground/80 mt-1">
-                      اضغط على "إضافة حقل جديد" أو اختر أحد الحقول السريعة أعلاه
+                      Click "Add Custom Field" or choose from the quick presets above
                     </p>
                   </div>
                 ) : (
@@ -605,9 +604,9 @@ export function RegistrationSettingsPage() {
 
                       <div className="flex items-center gap-2">
                         {field.required ? (
-                          <Badge tone="default" className="text-[10px] border border-primary/30 text-primary">إجباري</Badge>
+                          <Badge tone="default" className="text-[10px] border border-primary/30 text-primary">Required</Badge>
                         ) : (
-                          <Badge tone="neutral" className="text-[10px] text-muted-foreground">اختياري</Badge>
+                          <Badge tone="neutral" className="text-[10px] text-muted-foreground">Optional</Badge>
                         )}
                         <Button
                           variant="ghost"
@@ -627,26 +626,26 @@ export function RegistrationSettingsPage() {
               {showAddForm && (
                 <div className="rounded-xl border border-primary/30 bg-primary/[0.02] p-4.5 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-semibold text-foreground">بيانات الحقل الجديد</h4>
-                    <Button variant="ghost" size="sm" onClick={() => setShowAddForm(false)}>إلغاء</Button>
+                    <h4 className="text-sm font-semibold text-foreground">New Field Configuration</h4>
+                    <Button variant="ghost" size="sm" onClick={() => setShowAddForm(false)}>Cancel</Button>
                   </div>
 
                   <form onSubmit={addCustomField} className="space-y-3.5">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="block">
-                        <span className="label-caps mb-1.5 block">اسم الحقل (Label) *</span>
+                        <span className="label-caps mb-1.5 block">Field Label *</span>
                         <input
                           className="input-control"
                           value={newLabel}
                           onChange={(e) => handleLabelChange(e.target.value)}
-                          placeholder="مثال: رقم الهاتف أو جهة العمل"
+                          placeholder="e.g. Phone Number or Company Name"
                           required
                           autoFocus
                         />
                       </label>
 
                       <label className="block">
-                        <span className="label-caps mb-1.5 block">معرف الحقل (Key) *</span>
+                        <span className="label-caps mb-1.5 block">Field Identifier (Key) *</span>
                         <input
                           className="input-control font-mono text-xs"
                           value={newKey}
@@ -659,35 +658,35 @@ export function RegistrationSettingsPage() {
 
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="block">
-                        <span className="label-caps mb-1.5 block">نوع الحقل (Field type)</span>
+                        <span className="label-caps mb-1.5 block">Field Type</span>
                         <select
                           className="input-control"
                           value={newType}
                           onChange={(e) => setNewType(e.target.value as RegistrationFieldType)}
                         >
-                          <option value="text">نص قصير (Text)</option>
-                          <option value="phone">رقم هاتف (Phone)</option>
-                          <option value="email">بريد إلكتروني (Email)</option>
-                          <option value="number">رقم (Number)</option>
-                          <option value="select">قائمة منسدلة (Dropdown Select)</option>
-                          <option value="textarea">نص طويل / فقرة (Textarea)</option>
+                          <option value="text">Short Text</option>
+                          <option value="phone">Phone Number</option>
+                          <option value="email">Email Address</option>
+                          <option value="number">Number</option>
+                          <option value="select">Dropdown (Select)</option>
+                          <option value="textarea">Paragraph / Notes (Textarea)</option>
                         </select>
                       </label>
 
                       <label className="block">
-                        <span className="label-caps mb-1.5 block">نص توضيحي (Placeholder)</span>
+                        <span className="label-caps mb-1.5 block">Placeholder Text</span>
                         <input
                           className="input-control"
                           value={newPlaceholder}
                           onChange={(e) => setNewPlaceholder(e.target.value)}
-                          placeholder="مثال: يرجى إدخال..."
+                          placeholder="e.g. Enter your company name..."
                         />
                       </label>
                     </div>
 
                     {newType === "select" && (
                       <label className="block">
-                        <span className="label-caps mb-1.5 block">الخيارات (افصل بينها بفاصلة أو سطر جديد) *</span>
+                        <span className="label-caps mb-1.5 block">Options (separate by comma or newline) *</span>
                         <textarea
                           rows={2}
                           className="w-full rounded-xl border border-input bg-white p-2.5 text-xs text-foreground outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
@@ -708,16 +707,16 @@ export function RegistrationSettingsPage() {
                         className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
                       />
                       <label htmlFor="newFieldRequired" className="text-xs font-medium cursor-pointer text-foreground">
-                        هذا الحقل إجباري (Required)
+                        Mark this field as required
                       </label>
                     </div>
 
                     <div className="flex justify-end gap-2 pt-2">
                       <Button type="button" variant="outline" size="sm" onClick={() => setShowAddForm(false)}>
-                        إلغاء
+                        Cancel
                       </Button>
                       <Button type="submit" size="sm">
-                        إضافة الحقل
+                        Add Field
                       </Button>
                     </div>
                   </form>
@@ -755,9 +754,9 @@ export function RegistrationSettingsPage() {
 
               <div className="space-y-2.5 pt-2">
                 <div>
-                  <span className="text-[10px] font-semibold text-foreground block mb-1">الاسم بالكامل *</span>
+                  <span className="text-[10px] font-semibold text-foreground block mb-1">Full Name *</span>
                   <div className="h-8 rounded-lg border border-input bg-muted/20 px-2.5 flex items-center text-[11px] text-muted-foreground">
-                    محمد أحمد
+                    John Doe
                   </div>
                 </div>
 
@@ -774,24 +773,24 @@ export function RegistrationSettingsPage() {
 
                 <div className="pt-2">
                   <div className="h-9 w-full rounded-lg bg-primary text-primary-foreground font-semibold text-xs flex items-center justify-center shadow-sm">
-                    إرسال التسجيل
+                    Submit Registration
                   </div>
                 </div>
               </div>
 
               <div className="mt-4 rounded-xl border border-dashed border-border p-3 text-center bg-muted/20">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase">ما بعد التسجيل (Result Screen)</p>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase">Post-Registration Preview (Result Screen)</p>
                 {settings.showQrCode ? (
                   <div className="mt-2 flex flex-col items-center">
                     <div className="h-16 w-16 bg-foreground/10 rounded-lg flex items-center justify-center text-foreground">
                       <QrCode className="h-10 w-10 text-primary" />
                     </div>
-                    <span className="text-[10px] font-medium text-emerald-600 mt-1">سيظهر رمز QR للدخول</span>
+                    <span className="text-[10px] font-medium text-emerald-600 mt-1">Entrance QR code will be displayed</span>
                   </div>
                 ) : (
                   <div className="mt-2 flex flex-col items-center">
                     <CheckCircle2 className="h-6 w-6 text-emerald-500" />
-                    <span className="text-[10px] font-medium text-muted-foreground mt-1">رسالة تأكيد فقط (بدون QR)</span>
+                    <span className="text-[10px] font-medium text-muted-foreground mt-1">Confirmation receipt only (no QR code)</span>
                   </div>
                 )}
               </div>
@@ -804,8 +803,8 @@ export function RegistrationSettingsPage() {
       {showQrModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-2xl border border-border space-y-4 text-center">
-            <h3 className="font-display text-lg font-semibold text-foreground">رمز QR لرابط التسجيل</h3>
-            <p className="text-xs text-muted-foreground">امسح الرمز بكاميرا الهاتف لفتح صفحة التسجيل مباشرة</p>
+            <h3 className="font-display text-lg font-semibold text-foreground">Registration Link QR Code</h3>
+            <p className="text-xs text-muted-foreground">Scan with any smartphone camera to open the registration page directly</p>
             {linkQrDataUrl ? (
               <div className="mx-auto my-3 grid place-items-center rounded-xl bg-white p-3 shadow-inner border border-border w-fit">
                 <img src={linkQrDataUrl} alt="Registration Link QR" className="h-48 w-48" />
@@ -813,10 +812,10 @@ export function RegistrationSettingsPage() {
             ) : null}
             <div className="flex gap-2 justify-center pt-2">
               <Button variant="outline" size="sm" onClick={() => setShowQrModal(false)}>
-                إغلاق
+                Close
               </Button>
               <Button size="sm" onClick={copyLink}>
-                نسخ الرابط
+                Copy Link
               </Button>
             </div>
           </div>
