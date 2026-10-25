@@ -79,52 +79,122 @@ router.post("/:eventId/check-ins", async (req, res, next) => {
       }
 
       const currentScans = attendee.scan_count ?? (attendee.checked_in_at ? 1 : 0);
-      const requestedDirection = parsed.data.direction;
+      const requestedDirection = parsed.data.direction ?? "auto";
 
-      // Check max scan limit
-      if (maxScans > 0 && currentScans >= maxScans) {
-        await client.query("COMMIT");
-        res.setHeader("Cache-Control", "private, no-store");
-        const msg = maxScans === 1
-          ? `${attendee.name} has already checked in.`
-          : `Maximum scan limit reached for ${attendee.name} (${currentScans} of ${maxScans} scans used).`;
-        return sendJson(res, checkInResultSchema, {
-          status: "duplicate",
-          message: msg,
-          attendee: {
-            id: attendee.id,
-            name: attendee.name,
-            email: attendee.email,
-            ticketType: attendee.ticket_type,
-            checkedInAt: attendee.checked_in_at ? attendee.checked_in_at.toISOString() : new Date().toISOString(),
-          },
-          direction: attendee.last_direction === "out" ? "out" : "in",
-          action: attendee.last_direction === "out" ? "check_out" : "check_in",
-          scanCount: currentScans,
-          maxScans,
-          currentlyInside: attendee.last_direction === "in",
-        });
-      }
-
+      // 1. Determine target direction based on operator choice or auto
       let targetDirection: "in" | "out" = "in";
       let action: "check_in" | "check_out" = "check_in";
 
-      if (scanMode === "checkin_checkout") {
-        if (requestedDirection === "in") {
-          targetDirection = "in";
-          action = "check_in";
-        } else if (requestedDirection === "out") {
-          targetDirection = "out";
-          action = "check_out";
-        } else {
-          // Auto-toggle based on last_direction
-          targetDirection = attendee.last_direction === "in" ? "out" : "in";
-          action = targetDirection === "in" ? "check_in" : "check_out";
-        }
-      } else {
-        // "checkin_only" mode
+      if (requestedDirection === "in") {
         targetDirection = "in";
         action = "check_in";
+      } else if (requestedDirection === "out") {
+        targetDirection = "out";
+        action = "check_out";
+      } else {
+        // "auto": toggle based on current state
+        if (!attendee.checked_in_at || attendee.last_direction === "out") {
+          targetDirection = "in";
+          action = "check_in";
+        } else {
+          targetDirection = "out";
+          action = "check_out";
+        }
+      }
+
+      // 2. Validate Check-out attempts
+      if (targetDirection === "out") {
+        if (!attendee.checked_in_at) {
+          await client.query("COMMIT");
+          res.setHeader("Cache-Control", "private, no-store");
+          return sendJson(res, checkInResultSchema, {
+            status: "invalid",
+            message: `${attendee.name} has not checked in yet. Cannot record departure.`,
+            attendee: {
+              id: attendee.id,
+              name: attendee.name,
+              email: attendee.email,
+              ticketType: attendee.ticket_type,
+              checkedInAt: new Date().toISOString(),
+            },
+            direction: "out",
+            action: "check_out",
+            scanCount: currentScans,
+            maxScans,
+            currentlyInside: false,
+          });
+        }
+
+        if (attendee.last_direction === "out") {
+          await client.query("COMMIT");
+          res.setHeader("Cache-Control", "private, no-store");
+          return sendJson(res, checkInResultSchema, {
+            status: "duplicate",
+            message: `${attendee.name} is already checked out (currently outside).`,
+            attendee: {
+              id: attendee.id,
+              name: attendee.name,
+              email: attendee.email,
+              ticketType: attendee.ticket_type,
+              checkedInAt: attendee.checked_in_at.toISOString(),
+            },
+            direction: "out",
+            action: "check_out",
+            scanCount: currentScans,
+            maxScans,
+            currentlyInside: false,
+          });
+        }
+      }
+
+      // 3. Validate Check-in attempts
+      if (targetDirection === "in") {
+        // If attendee is already inside
+        if (attendee.last_direction === "in" && (maxScans === 1 || scanMode === "checkin_only")) {
+          await client.query("COMMIT");
+          res.setHeader("Cache-Control", "private, no-store");
+          return sendJson(res, checkInResultSchema, {
+            status: "duplicate",
+            message: `${attendee.name} is already checked in (currently inside).`,
+            attendee: {
+              id: attendee.id,
+              name: attendee.name,
+              email: attendee.email,
+              ticketType: attendee.ticket_type,
+              checkedInAt: attendee.checked_in_at ? attendee.checked_in_at.toISOString() : new Date().toISOString(),
+            },
+            direction: "in",
+            action: "check_in",
+            scanCount: currentScans,
+            maxScans,
+            currentlyInside: true,
+          });
+        }
+
+        // Check if max scans reached for entering
+        if (maxScans > 0 && currentScans >= maxScans) {
+          await client.query("COMMIT");
+          res.setHeader("Cache-Control", "private, no-store");
+          const msg = maxScans === 1
+            ? `${attendee.name} has already checked in.`
+            : `Maximum scan limit reached for ${attendee.name} (${currentScans} of ${maxScans} scans used).`;
+          return sendJson(res, checkInResultSchema, {
+            status: "duplicate",
+            message: msg,
+            attendee: {
+              id: attendee.id,
+              name: attendee.name,
+              email: attendee.email,
+              ticketType: attendee.ticket_type,
+              checkedInAt: attendee.checked_in_at ? attendee.checked_in_at.toISOString() : new Date().toISOString(),
+            },
+            direction: attendee.last_direction === "out" ? "out" : "in",
+            action: attendee.last_direction === "out" ? "check_out" : "check_in",
+            scanCount: currentScans,
+            maxScans,
+            currentlyInside: attendee.last_direction === "in",
+          });
+        }
       }
 
       const newScanCount = currentScans + 1;
@@ -163,14 +233,12 @@ router.post("/:eventId/check-ins", async (req, res, next) => {
       publishCheckIn(notice);
 
       let successMessage = "";
-      if (scanMode === "checkin_checkout") {
-        successMessage = targetDirection === "in"
-          ? `Check-in recorded: ${attendee.name} (Entrance)`
-          : `Check-out recorded: ${attendee.name} (Exit)`;
+      if (targetDirection === "out") {
+        successMessage = `Departure recorded: ${attendee.name} (Checked Out)`;
       } else {
         successMessage = maxScans > 1
           ? `Check-in recorded: ${attendee.name} (Scan ${newScanCount} of ${maxScans})`
-          : `${attendee.name} checked in.`;
+          : `Check-in recorded: ${attendee.name} (Entrance)`;
       }
 
       const result = {
