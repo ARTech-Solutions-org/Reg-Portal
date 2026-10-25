@@ -294,11 +294,11 @@ export function RegistrationSettingsPage() {
                         إظهار رمز الـ QR للمسجل بعد التسجيل
                       </span>
                       {settings.showQrCode ? (
-                        <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[10px]">
+                        <Badge tone="success" className="border border-emerald-500/40 text-[10px]">
                           <Eye className="h-3 w-3 mr-1" /> مفعل
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-[10px]">
+                        <Badge tone="warning" className="border border-amber-500/40 text-[10px]">
                           <EyeOff className="h-3 w-3 mr-1" /> مخفي
                         </Badge>
                       )}
@@ -335,11 +335,11 @@ export function RegistrationSettingsPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-foreground">حالة التسجيل (مفتوح / مغلق)</span>
                       {settings.isOpen ? (
-                        <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[10px]">
+                        <Badge tone="success" className="border border-emerald-500/40 text-[10px]">
                           مفتوح
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="border-destructive/40 bg-destructive/10 text-destructive text-[10px]">
+                        <Badge tone="danger" className="border border-destructive/40 text-[10px]">
                           مغلق
                         </Badge>
                       )}
@@ -546,7 +546,7 @@ export function RegistrationSettingsPage() {
               <div className="rounded-xl border border-dashed border-border p-3.5 bg-muted/30">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">الاسم بالكامل (Full Name)</span>
-                  <Badge variant="outline" className="text-[10px]">حقل أساسي إجباري</Badge>
+                  <Badge tone="neutral" className="text-[10px]">حقل أساسي إجباري</Badge>
                 </div>
               </div>
 
@@ -605,9 +605,9 @@ export function RegistrationSettingsPage() {
 
                       <div className="flex items-center gap-2">
                         {field.required ? (
-                          <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">إجباري</Badge>
+                          <Badge tone="default" className="text-[10px] border border-primary/30 text-primary">إجباري</Badge>
                         ) : (
-                          <Badge variant="outline" className="text-[10px] text-muted-foreground">اختياري</Badge>
+                          <Badge tone="neutral" className="text-[10px] text-muted-foreground">اختياري</Badge>
                         )}
                         <Button
                           variant="ghost"
@@ -734,7 +734,7 @@ export function RegistrationSettingsPage() {
               <Smartphone className="h-4 w-4 text-primary" />
               Live attendee preview
             </span>
-            <Badge variant="outline" className="text-[10px]">
+            <Badge tone="neutral" className="text-[10px]">
               {settings.showQrCode ? "QR: On" : "QR: Off"}
             </Badge>
           </div>

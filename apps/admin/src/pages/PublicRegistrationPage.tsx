@@ -218,7 +218,7 @@ export function PublicRegistrationPage() {
                 className="h-16 w-auto max-w-[200px] object-contain mb-1"
               />
             )}
-            <Badge variant="outline" className="text-xs uppercase tracking-wider text-primary border-primary/20 bg-primary/[0.04]">
+            <Badge tone="default" className="text-xs uppercase tracking-wider text-primary border border-primary/20 bg-primary/[0.04]">
               تسجيل حضور الفعالية
             </Badge>
             <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
@@ -280,7 +280,7 @@ export function PublicRegistrationPage() {
               )}
               <div className="flex justify-between items-center">
                 <span className="text-xs text-muted-foreground">نوع التذكرة:</span>
-                <Badge variant="outline" className="text-xs font-semibold">{registrationResult.attendee.ticketType}</Badge>
+                <Badge tone="neutral" className="text-xs font-semibold">{registrationResult.attendee.ticketType}</Badge>
               </div>
             </div>
 
