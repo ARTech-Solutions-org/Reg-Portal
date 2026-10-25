@@ -103,3 +103,30 @@ CREATE TABLE IF NOT EXISTS public.project_branding (
   updated_by uuid NOT NULL REFERENCES public.organizers(id),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS public.event_registration_settings (
+  event_id uuid PRIMARY KEY REFERENCES public.events(id) ON DELETE CASCADE,
+  is_open boolean NOT NULL DEFAULT true,
+  show_qr_code boolean NOT NULL DEFAULT true,
+  max_registrations_per_device integer NOT NULL DEFAULT 1,
+  max_scans_per_attendee integer NOT NULL DEFAULT 1,
+  scan_mode text NOT NULL DEFAULT 'checkin_only',
+  title text NOT NULL DEFAULT '',
+  description text NOT NULL DEFAULT '',
+  success_message text NOT NULL DEFAULT '',
+  fields jsonb NOT NULL DEFAULT '[]'::jsonb,
+  updated_by uuid REFERENCES public.organizers(id),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.event_registration_settings ADD COLUMN IF NOT EXISTS max_registrations_per_device integer NOT NULL DEFAULT 1;
+ALTER TABLE public.event_registration_settings ADD COLUMN IF NOT EXISTS max_scans_per_attendee integer NOT NULL DEFAULT 1;
+ALTER TABLE public.event_registration_settings ADD COLUMN IF NOT EXISTS scan_mode text NOT NULL DEFAULT 'checkin_only';
+
+CREATE TABLE IF NOT EXISTS public.event_device_registrations (
+  event_id uuid NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
+  device_id text NOT NULL,
+  count integer NOT NULL DEFAULT 1,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (event_id, device_id)
+);

@@ -18,6 +18,7 @@ import streamRouter from "./routes/stream.js";
 import scannerSessionRouter from "./routes/scanner-session.js";
 import scannerBrandingRouter from "./routes/scanner-branding.js";
 import eventAdminBrandingRouter from "./routes/event-admin-branding.js";
+import registrationRouter from "./routes/registration.js";
 import { pool } from "./db/pool.js";
 import { sendJson } from "./lib/responses.js";
 
@@ -50,8 +51,9 @@ app.use("/api/events", scannerSessionRouter);
 app.use("/api/events", scannerBrandingRouter);
 // These staff-token routes must run before the organizer-only event/attendee routers below.
 app.use("/api/events", checkinsRouter);
-// Dashboard must be before eventsRouter/attendeesRouter since it has a public route (/public/share)
+// Dashboard and registration must be before eventsRouter/attendeesRouter since they have public routes
 app.use("/api/events", dashboardRouter);
+app.use("/api/events", registrationRouter);
 app.use("/api/events", eventsRouter);
 app.use("/api/events", attendeesRouter);
 app.use("/api/events", scannerLinksRouter);

@@ -147,4 +147,94 @@ describe("shared API wire contracts", () => {
     expect(body).toEqual({ name: "Product Summit" });
     expect(apiErrorResponseSchema.parse({ error: "Request failed." }).error).toBe("Request failed.");
   });
+
+  it("validates event registration settings, custom fields, and QR code visibility outcomes", async () => {
+    const {
+      eventRegistrationSettingsSchema,
+      defaultEventRegistrationSettings,
+      publicRegistrationInputSchema,
+      publicRegistrationResultSchema,
+    } = await import("@eventdesk/contracts");
+
+    // Default settings have showQrCode enabled
+    expect(defaultEventRegistrationSettings.showQrCode).toBe(true);
+    expect(defaultEventRegistrationSettings.isOpen).toBe(true);
+
+    // Custom registration settings with custom fields
+    const customSettings = eventRegistrationSettingsSchema.parse({
+      isOpen: true,
+      showQrCode: false, // Organizer opted to hide QR
+      title: "Conference Registration",
+      description: "Please fill out your details.",
+      successMessage: "Thank you! Your registration is complete.",
+      fields: [
+        {
+          id: "field-phone",
+          key: "phone_number",
+          label: "Phone Number",
+          type: "phone",
+          required: true,
+          placeholder: "+20 100 000 0000",
+          options: [],
+        },
+        {
+          id: "field-meal",
+          key: "meal_preference",
+          label: "Meal Preference",
+          type: "select",
+          required: false,
+          placeholder: "",
+          options: ["Standard", "Vegetarian", "Vegan"],
+        },
+      ],
+    });
+    expect(customSettings.showQrCode).toBe(false);
+    expect(customSettings.fields.length).toBe(2);
+    expect(customSettings.fields[0]!.key).toBe("phone_number");
+
+    // Public registration input validation
+    const input = publicRegistrationInputSchema.parse({
+      name: "Omar Khaled",
+      email: "omar@example.com",
+      ticketType: "General",
+      customFields: {
+        phone_number: "+201234567890",
+        meal_preference: "Vegetarian",
+      },
+    });
+    expect(input.name).toBe("Omar Khaled");
+    expect(input.customFields.phone_number).toBe("+201234567890");
+
+    // Result with QR hidden (showQrCode: false, qrDataUrl: null)
+    const resultHiddenQr = publicRegistrationResultSchema.parse({
+      success: true,
+      message: "Thank you! Your registration is complete.",
+      attendee: {
+        id: recordId,
+        name: "Omar Khaled",
+        email: "omar@example.com",
+        ticketType: "General",
+      },
+      showQrCode: false,
+      qrDataUrl: null,
+    });
+    expect(resultHiddenQr.showQrCode).toBe(false);
+    expect(resultHiddenQr.qrDataUrl).toBeNull();
+
+    // Result with QR shown (showQrCode: true, qrDataUrl: data URL)
+    const resultVisibleQr = publicRegistrationResultSchema.parse({
+      success: true,
+      message: "Registration successful!",
+      attendee: {
+        id: recordId,
+        name: "Omar Khaled",
+        email: "omar@example.com",
+        ticketType: "General",
+      },
+      showQrCode: true,
+      qrDataUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==",
+    });
+    expect(resultVisibleQr.showQrCode).toBe(true);
+    expect(resultVisibleQr.qrDataUrl).toBe("data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==");
+  });
 });

@@ -29,13 +29,20 @@ export async function createEventTables(client: PoolClient, schema: string, even
     created_at timestamptz NOT NULL DEFAULT now()
   )`);
   await client.query(`ALTER TABLE ${qSchema}.${attendees} ADD COLUMN IF NOT EXISTS custom_fields jsonb NOT NULL DEFAULT '{}'::jsonb`);
+  await client.query(`ALTER TABLE ${qSchema}.${attendees} ADD COLUMN IF NOT EXISTS scan_count integer NOT NULL DEFAULT 0`);
+  await client.query(`ALTER TABLE ${qSchema}.${attendees} ADD COLUMN IF NOT EXISTS last_direction text`);
+  await client.query(`ALTER TABLE ${qSchema}.${attendees} ADD COLUMN IF NOT EXISTS checked_out_at timestamptz`);
   await client.query(`CREATE INDEX IF NOT EXISTS ${quoteIdentifier(`${names.attendees}_checked_idx`)} ON ${qSchema}.${attendees}(checked_in_at DESC)`);
   await client.query(`CREATE TABLE IF NOT EXISTS ${qSchema}.${checkins} (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    attendee_id uuid NOT NULL UNIQUE REFERENCES ${qSchema}.${attendees}(id) ON DELETE CASCADE,
+    attendee_id uuid NOT NULL REFERENCES ${qSchema}.${attendees}(id) ON DELETE CASCADE,
+    direction text NOT NULL DEFAULT 'in',
     scanner_label text NOT NULL DEFAULT 'Organizer',
     scanned_at timestamptz NOT NULL DEFAULT now()
   )`);
+  await client.query(`ALTER TABLE ${qSchema}.${checkins} DROP CONSTRAINT IF EXISTS ${quoteIdentifier(`${names.checkins}_attendee_id_key`)}`);
+  await client.query(`ALTER TABLE ${qSchema}.${checkins} DROP CONSTRAINT IF EXISTS checkins_attendee_id_key`);
+  await client.query(`ALTER TABLE ${qSchema}.${checkins} ADD COLUMN IF NOT EXISTS direction text NOT NULL DEFAULT 'in'`);
   await client.query(`CREATE INDEX IF NOT EXISTS ${quoteIdentifier(`${names.checkins}_scanned_idx`)} ON ${qSchema}.${checkins}(scanned_at DESC)`);
   return names;
 }

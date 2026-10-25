@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDownToLine, ArrowLeft, Check, FilePlus2, FileText, Plus, Search, UserPlus, UsersRound, X } from "lucide-react";
+import { ArrowDownToLine, ArrowLeft, Check, FilePlus2, FileText, Link2, Plus, Search, UserPlus, UsersRound, X } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { apiErrorResponseSchema, attendeeInputSchema, attendeeListSchema, bulkAttendeeInputSchema, bulkAttendeeResultSchema, contractJson, customFieldKeySchema, issuedAttendeeSchema, type Attendee, type AttendeeInput, type BulkAttendeeResult, type IssuedAttendee } from "@eventdesk/contracts";
@@ -209,6 +209,12 @@ export function AttendeesPage() {
     <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
       <div className="flex items-center gap-2"><Badge tone="default">{attendees.data?.length ?? 0} shown</Badge><span className="text-xs text-muted-foreground">Up to 500 records per view</span></div>
       <div className="flex flex-wrap gap-2">
+        <Link to={`/admin/events/${eventId}/registration`}>
+          <Button size="sm" variant="outline" className="gap-1.5">
+            <Link2 className="h-4 w-4 text-primary" />
+            Registration link & form
+          </Button>
+        </Link>
         <Button size="sm" variant="outline" onClick={() => { setShowBulk((value) => !value); setShowForm(false); }}><FilePlus2 className="h-4 w-4" />Import CSV</Button>
         <Button size="sm" onClick={() => { setShowForm((value) => !value); setShowBulk(false); }}><UserPlus className="h-4 w-4" />Add attendee</Button>
       </div>

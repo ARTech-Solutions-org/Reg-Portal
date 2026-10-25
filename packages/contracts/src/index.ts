@@ -29,7 +29,11 @@ export const attendeeInputSchema = z.object({
   customFields: attendeeCustomFieldsSchema.default({}),
 }).strict();
 export const bulkAttendeeInputSchema = z.object({ attendees: z.array(attendeeInputSchema).min(1).max(500) }).strict();
-export const checkInInputSchema = z.object({ token: z.string().trim().min(16).max(256) }).strict();
+export const scanDirectionSchema = z.enum(["in", "out", "auto"]);
+export const checkInInputSchema = z.object({
+  token: z.string().trim().min(16).max(256),
+  direction: scanDirectionSchema.optional().default("auto"),
+}).strict();
 export const scannerLinkInputSchema = z.object({
   label: z.string().trim().min(1).max(80).default("Front gate"),
   expiresInHours: z.number().int().min(1).max(720).default(72),
@@ -196,10 +200,16 @@ export const bulkAttendeeResultSchema = z.object({
   attendees: z.array(issuedAttendeeSchema).min(1).max(500),
 }).strict().refine((value) => value.count === value.attendees.length, "Bulk issue count must equal its attendee row count.");
 const checkInAttendeeSchema = attendeeSchema.pick({ id: true, name: true, email: true, ticketType: true, checkedInAt: true });
+export const scanModeSchema = z.enum(["checkin_only", "checkin_checkout"]);
 export const checkInResultSchema = z.object({
   status: z.enum(["valid", "duplicate", "invalid"]),
   message: z.string().min(1).max(320),
   attendee: checkInAttendeeSchema.nullable(),
+  direction: z.enum(["in", "out"]).optional(),
+  action: z.enum(["check_in", "check_out"]).optional(),
+  scanCount: z.number().int().optional(),
+  maxScans: z.number().int().optional(),
+  currentlyInside: z.boolean().optional(),
 }).strict().refine((value) => (value.status === "invalid") === (value.attendee === null), "Invalid check-ins must not include attendee data.");
 export const recentCheckInSchema = z.object({
   id: uuidSchema,
@@ -239,6 +249,8 @@ export const scannerSessionSchema = z.object({
   eventName: z.string().min(2).max(160),
   label: z.string().min(1).max(80),
   expiresAt: isoTimestampSchema.nullable(),
+  scanMode: scanModeSchema.optional().default("checkin_only"),
+  maxScansPerAttendee: z.number().int().nonnegative().optional().default(1),
 }).strict();
 export const badgeLayoutGetResponseSchema = z.object({ layout: badgeLayoutSchema.nullable(), updatedAt: isoTimestampSchema.nullable() }).strict();
 export const badgeLayoutPutResponseSchema = z.object({ layout: badgeLayoutSchema, updatedAt: isoTimestampSchema }).strict();
@@ -312,3 +324,87 @@ export type QrDataResponse = z.infer<typeof qrDataResponseSchema>;
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
 export type ApiErrorResponse = z.infer<typeof apiErrorResponseSchema>;
 export type CheckInNotice = z.infer<typeof checkInNoticeSchema>;
+
+export const registrationFieldTypeSchema = z.enum(["text", "number", "email", "phone", "select", "textarea"]);
+export const registrationFieldSchema = z.object({
+  id: z.string().min(1).max(50),
+  key: customFieldKeySchema,
+  label: z.string().trim().min(1).max(100),
+  type: registrationFieldTypeSchema.default("text"),
+  required: z.boolean().default(false),
+  placeholder: z.string().trim().max(120).default(""),
+  options: z.array(z.string().trim().min(1).max(100)).max(50).default([]),
+}).strict();
+
+export const eventRegistrationSettingsSchema = z.object({
+  isOpen: z.boolean().default(true),
+  showQrCode: z.boolean().default(true),
+  maxRegistrationsPerDevice: z.number().int().nonnegative().default(1),
+  maxScansPerAttendee: z.number().int().nonnegative().default(1),
+  scanMode: scanModeSchema.default("checkin_only"),
+  title: z.string().trim().max(160).default(""),
+  description: z.string().trim().max(1000).default(""),
+  successMessage: z.string().trim().max(500).default("تم تسجيلك بنجاح!"),
+  fields: z.array(registrationFieldSchema).max(30).default([]),
+}).strict();
+
+export const defaultEventRegistrationSettings: z.infer<typeof eventRegistrationSettingsSchema> = {
+  isOpen: true,
+  showQrCode: true,
+  maxRegistrationsPerDevice: 1,
+  maxScansPerAttendee: 1,
+  scanMode: "checkin_only",
+  title: "",
+  description: "",
+  successMessage: "تم تسجيل بياناتك بنجاح! نراكم قريباً في الفعالية.",
+  fields: [],
+};
+
+export const eventRegistrationSettingsResponseSchema = z.object({
+  settings: eventRegistrationSettingsSchema,
+  updatedAt: isoTimestampSchema.nullable(),
+}).strict();
+
+export const publicEventRegistrationInfoSchema = z.object({
+  eventId: uuidSchema,
+  eventName: z.string().min(1).max(160),
+  venue: z.string().max(240).nullable(),
+  startsAt: isoTimestampSchema.nullable(),
+  isOpen: z.boolean(),
+  maxRegistrationsPerDevice: z.number().int().nonnegative().default(1),
+  title: z.string(),
+  description: z.string(),
+  fields: z.array(registrationFieldSchema),
+  branding: eventAdminBrandingSchema.optional(),
+}).strict();
+
+export const publicRegistrationInputSchema = z.object({
+  name: nonEmptyNameSchema,
+  email: z.string().trim().email().max(320).optional().or(z.literal("")),
+  ticketType: z.string().trim().min(1).max(80).default("General"),
+  customFields: z.record(customFieldKeySchema, z.string().max(1000)).default({}),
+  deviceId: z.string().trim().max(100).optional(),
+}).strict();
+
+export const publicRegistrationResultSchema = z.object({
+  success: z.literal(true),
+  message: z.string(),
+  attendee: z.object({
+    id: uuidSchema,
+    name: z.string(),
+    email: z.string().nullable(),
+    ticketType: z.string(),
+  }).strict(),
+  showQrCode: z.boolean(),
+  qrDataUrl: z.string().nullable(),
+}).strict();
+
+export type ScanDirection = z.infer<typeof scanDirectionSchema>;
+export type ScanMode = z.infer<typeof scanModeSchema>;
+export type RegistrationFieldType = z.infer<typeof registrationFieldTypeSchema>;
+export type RegistrationField = z.infer<typeof registrationFieldSchema>;
+export type EventRegistrationSettings = z.infer<typeof eventRegistrationSettingsSchema>;
+export type EventRegistrationSettingsResponse = z.infer<typeof eventRegistrationSettingsResponseSchema>;
+export type PublicEventRegistrationInfo = z.infer<typeof publicEventRegistrationInfoSchema>;
+export type PublicRegistrationInput = z.infer<typeof publicRegistrationInputSchema>;
+export type PublicRegistrationResult = z.infer<typeof publicRegistrationResultSchema>;

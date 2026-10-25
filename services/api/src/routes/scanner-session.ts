@@ -11,16 +11,33 @@ router.get("/:eventId/scanner-session", async (req, res, next) => {
   const token = req.get("x-scanner-token");
   if (!token) { res.status(401).json({ error: "A scanner link is required." }); return; }
   try {
-    const result = await pool.query<{ event_id: string; name: string; label: string; expires_at: Date | null }>(
-      `SELECT e.id AS event_id, e.name, sl.label, sl.expires_at
-       FROM public.scanner_links sl JOIN public.events e ON e.id=sl.event_id
+    const result = await pool.query<{
+      event_id: string;
+      name: string;
+      label: string;
+      expires_at: Date | null;
+      scan_mode: "checkin_only" | "checkin_checkout" | null;
+      max_scans_per_attendee: number | null;
+    }>(
+      `SELECT e.id AS event_id, e.name, sl.label, sl.expires_at,
+              rs.scan_mode, rs.max_scans_per_attendee
+       FROM public.scanner_links sl
+       JOIN public.events e ON e.id=sl.event_id
+       LEFT JOIN public.event_registration_settings rs ON rs.event_id=e.id
        WHERE e.id=$1 AND sl.token_hash=$2 AND sl.revoked_at IS NULL AND (sl.expires_at IS NULL OR sl.expires_at > now()) LIMIT 1`,
       [req.params.eventId, hashToken(token)],
     );
     const session = result.rows[0];
     if (!session) { res.status(401).json({ error: "This scanner link is invalid, expired, or revoked." }); return; }
     res.setHeader("Cache-Control", "private, no-store");
-    return sendJson(res, scannerSessionSchema, { eventId: session.event_id, eventName: session.name, label: session.label, expiresAt: session.expires_at?.toISOString() ?? null });
+    return sendJson(res, scannerSessionSchema, {
+      eventId: session.event_id,
+      eventName: session.name,
+      label: session.label,
+      expiresAt: session.expires_at?.toISOString() ?? null,
+      scanMode: session.scan_mode ?? "checkin_only",
+      maxScansPerAttendee: session.max_scans_per_attendee ?? 1,
+    });
   } catch (error) { next(error); }
 });
 export default router;

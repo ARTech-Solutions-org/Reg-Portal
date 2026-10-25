@@ -45,13 +45,31 @@ router.post("/:eventId/check-ins", async (req, res, next) => {
       }
     }
     if (!event) { res.status(401).json({ error: "This scanner link is invalid, expired, or no longer authorized." }); return; }
+    // Query event scan settings
+    const settingsRes = await pool.query<{ max_scans_per_attendee: number | null; scan_mode: "checkin_only" | "checkin_checkout" | null }>(
+      "SELECT max_scans_per_attendee, scan_mode FROM public.event_registration_settings WHERE event_id = $1",
+      [event.id],
+    );
+    const maxScans = settingsRes.rows[0]?.max_scans_per_attendee ?? 1;
+    const scanMode = settingsRes.rows[0]?.scan_mode ?? "checkin_only";
+
     const names = tenantSqlNames(event);
     const tokenHash = hashToken(parsed.data.token);
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      const found = await client.query<{ id: string; name: string; email: string | null; ticket_type: string; checked_in_at: Date | null }>(
-        `SELECT id,name,email,ticket_type,checked_in_at FROM ${names.schema}.${names.attendees} WHERE qr_token_hash=$1 FOR UPDATE`, [tokenHash],
+      const found = await client.query<{
+        id: string;
+        name: string;
+        email: string | null;
+        ticket_type: string;
+        checked_in_at: Date | null;
+        scan_count: number | null;
+        last_direction: string | null;
+      }>(
+        `SELECT id, name, email, ticket_type, checked_in_at, scan_count, last_direction
+         FROM ${names.schema}.${names.attendees} WHERE qr_token_hash=$1 FOR UPDATE`,
+        [tokenHash],
       );
       const attendee = found.rows[0];
       if (!attendee) {
@@ -59,21 +77,119 @@ router.post("/:eventId/check-ins", async (req, res, next) => {
         res.setHeader("Cache-Control", "private, no-store");
         return sendJson(res, checkInResultSchema, { status: "invalid", message: "This QR code is not registered for this event.", attendee: null });
       }
-      if (attendee.checked_in_at) {
+
+      const currentScans = attendee.scan_count ?? (attendee.checked_in_at ? 1 : 0);
+      const requestedDirection = parsed.data.direction;
+
+      // Check max scan limit
+      if (maxScans > 0 && currentScans >= maxScans) {
         await client.query("COMMIT");
         res.setHeader("Cache-Control", "private, no-store");
-        return sendJson(res, checkInResultSchema, { status: "duplicate", message: `${attendee.name} has already checked in.`, attendee: { id: attendee.id, name: attendee.name, email: attendee.email, ticketType: attendee.ticket_type, checkedInAt: attendee.checked_in_at.toISOString() } });
+        const msg = maxScans === 1
+          ? `${attendee.name} has already checked in.`
+          : `تم استنفاد الحد الأقصى لمرات المسح المسموح بها لهذا الرمز (${currentScans} من ${maxScans}).`;
+        return sendJson(res, checkInResultSchema, {
+          status: "duplicate",
+          message: msg,
+          attendee: {
+            id: attendee.id,
+            name: attendee.name,
+            email: attendee.email,
+            ticketType: attendee.ticket_type,
+            checkedInAt: attendee.checked_in_at ? attendee.checked_in_at.toISOString() : new Date().toISOString(),
+          },
+          direction: attendee.last_direction === "out" ? "out" : "in",
+          action: attendee.last_direction === "out" ? "check_out" : "check_in",
+          scanCount: currentScans,
+          maxScans,
+          currentlyInside: attendee.last_direction === "in",
+        });
       }
-      const updated = await client.query<{ checked_in_at: Date }>(
-        `UPDATE ${names.schema}.${names.attendees} SET checked_in_at=now() WHERE id=$1 RETURNING checked_in_at`, [attendee.id],
+
+      let targetDirection: "in" | "out" = "in";
+      let action: "check_in" | "check_out" = "check_in";
+
+      if (scanMode === "checkin_checkout") {
+        if (requestedDirection === "in") {
+          targetDirection = "in";
+          action = "check_in";
+        } else if (requestedDirection === "out") {
+          targetDirection = "out";
+          action = "check_out";
+        } else {
+          // Auto-toggle based on last_direction
+          targetDirection = attendee.last_direction === "in" ? "out" : "in";
+          action = targetDirection === "in" ? "check_in" : "check_out";
+        }
+      } else {
+        // "checkin_only" mode
+        targetDirection = "in";
+        action = "check_in";
+      }
+
+      const newScanCount = currentScans + 1;
+      const scannedAt = new Date();
+
+      if (targetDirection === "in") {
+        await client.query(
+          `UPDATE ${names.schema}.${names.attendees}
+           SET checked_in_at = COALESCE(checked_in_at, now()),
+               scan_count = $2,
+               last_direction = 'in'
+           WHERE id = $1`,
+          [attendee.id, newScanCount],
+        );
+      } else {
+        await client.query(
+          `UPDATE ${names.schema}.${names.attendees}
+           SET checked_out_at = now(),
+               scan_count = $2,
+               last_direction = 'out'
+           WHERE id = $1`,
+          [attendee.id, newScanCount],
+        );
+      }
+
+      await client.query(
+        `INSERT INTO ${names.schema}.${names.checkins}(attendee_id, scanner_label, direction, scanned_at)
+         VALUES ($1, $2, $3, $4)`,
+        [attendee.id, scanner?.label ?? "Organizer", targetDirection, scannedAt],
       );
-      const scannedAt = updated.rows[0]!.checked_in_at;
-      await client.query(`INSERT INTO ${names.schema}.${names.checkins}(attendee_id,scanner_label) VALUES ($1,$2)`, [attendee.id, scanner?.label ?? "Organizer"]);
+
       const notice = checkInNoticeSchema.parse({ eventId: event.id, attendeeId: attendee.id, occurredAt: scannedAt.toISOString() });
       await client.query("SELECT pg_notify($1,$2)", ["eventdesk_checkins", JSON.stringify(notice)]);
       await client.query("COMMIT");
-      const result = { status: "valid", message: `${attendee.name} checked in.`, attendee: { id: attendee.id, name: attendee.name, email: attendee.email, ticketType: attendee.ticket_type, checkedInAt: scannedAt.toISOString() } };
+
       publishCheckIn(notice);
+
+      let successMessage = "";
+      if (scanMode === "checkin_checkout") {
+        successMessage = targetDirection === "in"
+          ? `تم تسجيل حضور: ${attendee.name} (دخول)`
+          : `تم تسجيل انصراف: ${attendee.name} (خروج)`;
+      } else {
+        successMessage = maxScans > 1
+          ? `تم تسجيل حضور: ${attendee.name} (مسحة ${newScanCount} من ${maxScans})`
+          : `${attendee.name} checked in.`;
+      }
+
+      const result = {
+        status: "valid" as const,
+        message: successMessage,
+        attendee: {
+          id: attendee.id,
+          name: attendee.name,
+          email: attendee.email,
+          ticketType: attendee.ticket_type,
+          checkedInAt: scannedAt.toISOString(),
+        },
+        direction: targetDirection,
+        action,
+        scanCount: newScanCount,
+        maxScans: maxScans || undefined,
+        currentlyInside: targetDirection === "in",
+      };
+
       res.setHeader("Cache-Control", "private, no-store");
       return sendJson(res, checkInResultSchema, result);
     } catch (error) {

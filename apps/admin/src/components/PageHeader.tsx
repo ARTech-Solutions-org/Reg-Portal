@@ -7,6 +7,15 @@ export function PageHeader({ eyebrow, title, description, action }: { eyebrow?: 
 }
 
 export function EventTabs({ eventId }: { eventId: string }) {
-  const links = [{ to: "", label: "Overview" }, { to: "/attendees", label: "Attendees" }, { to: "/analytics", label: "Analytics" }, { to: "/links", label: "Scanner links" }, { to: "/scanner-branding", label: "Scanner design" }, { to: "/designer", label: "Badge designer" }, { to: "/event-branding", label: "Dashboard branding" }];
+  const links = [
+    { to: "", label: "Overview" },
+    { to: "/attendees", label: "Attendees" },
+    { to: "/registration", label: "Registration link" },
+    { to: "/analytics", label: "Analytics" },
+    { to: "/links", label: "Scanner links" },
+    { to: "/scanner-branding", label: "Scanner design" },
+    { to: "/designer", label: "Badge designer" },
+    { to: "/event-branding", label: "Dashboard branding" },
+  ];
   return <nav aria-label="Event sections" className="mb-6 flex gap-1 overflow-x-auto border-b border-border">{links.map((item) => <NavLink key={item.to} to={`/admin/events/${eventId}${item.to}`} end={!item.to} className={({ isActive }) => cn("whitespace-nowrap border-b-2 px-3 py-3 text-xs font-semibold transition-colors", isActive ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}>{item.label}</NavLink>)}</nav>;
 }

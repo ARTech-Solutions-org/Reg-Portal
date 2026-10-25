@@ -14,6 +14,8 @@ const AnalyticsPage = lazy(() => import("@/pages/AnalyticsPage").then((module) =
 const DesignerPage = lazy(() => import("@/pages/DesignerPage").then((module) => ({ default: module.DesignerPage })));
 const PublicAnalyticsPage = lazy(() => import("@/pages/PublicAnalyticsPage").then((module) => ({ default: module.PublicAnalyticsPage })));
 const EventBrandingPage = lazy(() => import("@/pages/EventBrandingPage").then((module) => ({ default: module.EventBrandingPage })));
+const RegistrationSettingsPage = lazy(() => import("@/pages/RegistrationSettingsPage").then((module) => ({ default: module.RegistrationSettingsPage })));
+const PublicRegistrationPage = lazy(() => import("@/pages/PublicRegistrationPage").then((module) => ({ default: module.PublicRegistrationPage })));
 
 function Protected() {
   const { user, loading } = useAuth();
@@ -28,6 +30,7 @@ export default function App() {
   return <AuthProvider><Suspense fallback={<div className="grid min-h-screen place-items-center text-sm text-muted-foreground">Loading workspace tool…</div>}><Routes>
     <Route path="/login" element={<LoginPage />} />
     <Route path="/share/:token" element={<PublicAnalyticsPage />} />
+    <Route path="/register/:eventId" element={<PublicRegistrationPage />} />
     <Route element={<Protected />}><Route element={<AppShell />}>
       <Route path="/" element={<Navigate to="/admin" replace />} />
       <Route path="/admin" element={<DashboardPage />} />
@@ -35,6 +38,7 @@ export default function App() {
       <Route path="/admin/events/:eventId" element={<EventOverviewPage />} />
       <Route path="/admin/events/:eventId/event-branding" element={<EventBrandingPage />} />
       <Route path="/admin/events/:eventId/attendees" element={<AttendeesPage />} />
+      <Route path="/admin/events/:eventId/registration" element={<RegistrationSettingsPage />} />
       <Route path="/admin/events/:eventId/analytics" element={<AnalyticsPage />} />
       <Route path="/admin/events/:eventId/links" element={<ScannerLinksPage />} />
       <Route path="/admin/events/:eventId/scanner-branding" element={<ScannerBrandingPage />} />
