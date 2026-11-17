@@ -26,6 +26,7 @@ import {
   scannerBrandingGetResponseSchema,
   scannerLogoDataUrls,
   scannerSessionSchema,
+  scannerDirectionForMode,
   type CheckInResult,
   type ScanDirection,
   type ScannerBranding,
@@ -55,8 +56,8 @@ function ScannerDesk() {
   const [result, setResult] = useState<CheckInResult | null>(null);
   const [manualCode, setManualCode] = useState("");
 
-  const directionStorageKey = `eventdesk:scanner_direction:${eventId}`;
-  const [direction, setDirectionState] = useState<ScanDirection>(() => {
+  const directionStorageKey = `eventdesk:scanner_direction:${eventId}:${token}`;
+  const [selectedDirection, setDirectionState] = useState<ScanDirection>(() => {
     try {
       const saved = localStorage.getItem(directionStorageKey);
       if (saved === "in" || saved === "out" || saved === "auto") return saved;
@@ -77,6 +78,8 @@ function ScannerDesk() {
     },
     [directionStorageKey],
   );
+
+  const direction = scannerDirectionForMode(session?.mode ?? "both", selectedDirection);
 
   const [recent, setRecent] = useState<RecentScan[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -125,7 +128,7 @@ function ScannerDesk() {
 
   const processCode = useCallback(async (code: string) => {
     const clean = code.trim();
-    if (!clean || !token || busyRef.current) return;
+    if (!clean || !token || !session || busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
     setResult(null);
@@ -159,7 +162,7 @@ function ScannerDesk() {
       setManualCode("");
       if (resumeRef.current) window.setTimeout(() => { void startCameraRef.current?.(); }, 1_700);
     }
-  }, [direction, eventId, token]);
+  }, [direction, eventId, token, session]);
   const processRef = useRef(processCode);
   processRef.current = processCode;
 
@@ -320,7 +323,7 @@ function ScannerDesk() {
                 </div>
 
                 {/* Single-tap buttons for gate staff */}
-                <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-white/10 bg-black/50 p-1">
+                {session.mode === "both" && <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-white/10 bg-black/50 p-1">
                   <button
                     type="button"
                     onClick={() => setDirection("in")}
@@ -347,19 +350,8 @@ function ScannerDesk() {
                     <span>Check-out</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setDirection("auto")}
-                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-all ${
-                      direction === "auto"
-                        ? "bg-purple-600 text-white shadow-lg shadow-purple-500/25 ring-2 ring-purple-400/40"
-                        : "text-white/60 hover:text-white hover:bg-white/5"
-                    }`}
-                  >
-                    <ArrowLeftRight className="h-4 w-4" />
-                    <span>Auto</span>
-                  </button>
-                </div>
+
+                </div>}
               </div>
             </section>
 

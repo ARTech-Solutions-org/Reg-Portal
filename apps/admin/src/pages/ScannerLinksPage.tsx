@@ -5,6 +5,8 @@ import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   contractJson,
+  scannerLinkModeLabels,
+  type ScannerLinkMode,
   scannerLinkCopyResponseSchema,
   scannerLinkInputSchema,
   scannerLinkIssueResponseSchema,
@@ -24,6 +26,7 @@ export function ScannerLinksPage() {
   const queryClient = useQueryClient();
   const eventQuery = useEventDashboard(eventId);
   const [label, setLabel] = useState("Front gate");
+  const [mode, setMode] = useState<ScannerLinkMode>("both");
   const [hours, setHours] = useState(72);
   const [newLink, setNewLink] = useState<ScannerLinkIssueResponse | null>(null);
 
@@ -34,7 +37,7 @@ export function ScannerLinksPage() {
   const create = useMutation({
     mutationFn: () => apiContract(`/events/${eventId}/scanner-links`, scannerLinkIssueResponseSchema, {
       method: "POST",
-      body: contractJson(scannerLinkInputSchema, { label, expiresInHours: hours }),
+      body: contractJson(scannerLinkInputSchema, { label, mode, expiresInHours: hours }),
     }),
     onSuccess: async (value) => {
       setNewLink(value);
@@ -94,6 +97,12 @@ export function ScannerLinksPage() {
                 <option value={8}>8 hours</option><option value={24}>24 hours</option><option value={72}>3 days</option><option value={168}>7 days</option><option value={720}>30 days</option>
               </select>
             </label>
+            <label className="block">
+              <span className="label-caps mb-2 block">Scanner mode</span>
+              <select className="input-control" value={mode} onChange={(event) => setMode(event.target.value as ScannerLinkMode)}>
+                {Object.entries(scannerLinkModeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
             <Button className="w-full" disabled={create.isPending}>{create.isPending ? "Creating link…" : <>Create scanner URL <Plus className="h-4 w-4" /></>}</Button>
           </form>
           <div className="mt-5 rounded-xl bg-muted/70 p-3.5">
@@ -109,7 +118,7 @@ export function ScannerLinksPage() {
           <div className="flex items-start gap-3">
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-primary"><Check className="h-4 w-4" /></div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold">{newLink.label} is ready</p>
+              <p className="text-sm font-semibold">{newLink.label} is ready · {scannerLinkModeLabels[newLink.mode]}</p>
               <p className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{new URL(newLink.url, window.location.origin).toString()}</p>
               <div className="mt-3 flex gap-2">
                 <Button size="sm" onClick={() => void copy(newLink.url)}><Copy className="h-3.5 w-3.5" />Copy URL</Button>
@@ -129,7 +138,7 @@ export function ScannerLinksPage() {
                 <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${revoked || expired ? "bg-muted text-muted-foreground" : "bg-emerald-50 text-emerald-700"}`}><Link2 className="h-4 w-4" /></div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate text-sm font-semibold">{item.label}</p>
+                    <p className="truncate text-sm font-semibold">{item.label}</p><Badge>{scannerLinkModeLabels[item.mode]}</Badge>
                     <Badge tone={revoked ? "danger" : expired ? "warning" : "success"}>{revoked ? "Revoked" : expired ? "Expired" : "Active"}</Badge>
                   </div>
                   <p className="mt-1 text-[11px] text-muted-foreground">{item.expiresAt ? `Expires ${new Date(item.expiresAt).toLocaleString()}` : "No expiry"} · created {new Date(item.createdAt).toLocaleDateString()}</p>

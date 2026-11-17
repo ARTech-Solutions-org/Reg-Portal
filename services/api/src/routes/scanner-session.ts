@@ -15,11 +15,12 @@ router.get("/:eventId/scanner-session", async (req, res, next) => {
       event_id: string;
       name: string;
       label: string;
+      mode: "in" | "out" | "both" | "auto";
       expires_at: Date | null;
       scan_mode: "checkin_only" | "checkin_checkout" | null;
       max_scans_per_attendee: number | null;
     }>(
-      `SELECT e.id AS event_id, e.name, sl.label, sl.expires_at,
+      `SELECT e.id AS event_id, e.name, sl.label, sl.mode, sl.expires_at,
               rs.scan_mode, rs.max_scans_per_attendee
        FROM public.scanner_links sl
        JOIN public.events e ON e.id=sl.event_id
@@ -34,6 +35,7 @@ router.get("/:eventId/scanner-session", async (req, res, next) => {
       eventId: session.event_id,
       eventName: session.name,
       label: session.label,
+      mode: session.mode ?? "both",
       expiresAt: session.expires_at?.toISOString() ?? null,
       scanMode: session.scan_mode ?? "checkin_only",
       maxScansPerAttendee: session.max_scans_per_attendee ?? 1,

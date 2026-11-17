@@ -4,15 +4,15 @@ import { hashToken } from "../lib/tokens.js";
 import { pool } from "../db/pool.js";
 import { findEventForOrganizer, tenantSqlNames, type EventRow } from "../db/tenant.js";
 import { publishCheckIn } from "../realtime/hub.js";
-import { checkInInputSchema, checkInNoticeSchema, checkInResultSchema } from "@eventdesk/contracts";
+import { scannerDirectionForMode, type ScannerLinkMode, checkInInputSchema, checkInNoticeSchema, checkInResultSchema } from "@eventdesk/contracts";
 import { requireUuid } from "../middleware/auth.js";
 import { sendJson } from "../lib/responses.js";
 
 const router = Router();
-interface ScannerLink { label: string }
+interface ScannerLink { label: string; mode?: ScannerLinkMode }
 async function authorizeScanner(rawToken: string, eventId: string): Promise<ScannerLink | null> {
-  const result = await pool.query<{ label: string }>(
-    `SELECT label FROM public.scanner_links
+  const result = await pool.query<ScannerLink>(
+    `SELECT label, mode FROM public.scanner_links
      WHERE event_id=$1 AND token_hash=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now()) LIMIT 1`,
     [eventId, hashToken(rawToken)],
   );
@@ -34,7 +34,7 @@ router.post("/:eventId/check-ins", async (req, res, next) => {
       if (organizer.rows[0]) event = await findEventForOrganizer(req.params.eventId, organizer.rows[0].id);
     }
     // A staff URL remains sufficient even if this browser also has an unrelated organizer cookie.
-    if (!event && scannerToken) {
+    if (scannerToken) {
       scanner = await authorizeScanner(scannerToken, req.params.eventId);
       if (scanner) {
         const lookup = await pool.query<EventRow>(
@@ -44,6 +44,7 @@ router.post("/:eventId/check-ins", async (req, res, next) => {
         event = lookup.rows[0] ?? null;
       }
     }
+    if (scannerToken && !scanner) { res.status(401).json({ error: "This scanner link is invalid, expired, or revoked." }); return; }
     if (!event) { res.status(401).json({ error: "This scanner link is invalid, expired, or no longer authorized." }); return; }
     // Query event scan settings
     const settingsRes = await pool.query<{ max_scans_per_attendee: number | null; scan_mode: "checkin_only" | "checkin_checkout" | null }>(
@@ -80,7 +81,7 @@ router.post("/:eventId/check-ins", async (req, res, next) => {
 
       const attendeeLabel = attendee.name || "Attendee";
       const currentScans = attendee.scan_count ?? (attendee.checked_in_at ? 1 : 0);
-      const requestedDirection = parsed.data.direction ?? "auto";
+      const requestedDirection = scanner?.mode ? scannerDirectionForMode(scanner.mode, parsed.data.direction) : parsed.data.direction;
 
       // 1. Determine target direction based on operator choice or auto
       let targetDirection: "in" | "out" = "in";

@@ -15,11 +15,12 @@ router.get("/:eventId/scanner-links", async (req, res, next) => {
   try {
     const event = await findEventForOrganizer(req.params.eventId, organizerId(req));
     if (!event) { res.status(404).json({ error: "Event not found." }); return; }
-    const result = await pool.query("SELECT id, label, token_ciphertext, expires_at, revoked_at, created_at FROM public.scanner_links WHERE event_id=$1 ORDER BY created_at DESC", [event.id]);
+    const result = await pool.query("SELECT id, label, mode, token_ciphertext, expires_at, revoked_at, created_at FROM public.scanner_links WHERE event_id=$1 ORDER BY created_at DESC", [event.id]);
     return sendJson(res, scannerLinkListSchema, result.rows.map((row) => ({
       id: row.id,
       eventId: event.id,
       label: row.label,
+      mode: row.mode ?? "both",
       expiresAt: row.expires_at?.toISOString() ?? null,
       revokedAt: row.revoked_at?.toISOString() ?? null,
       createdAt: row.created_at.toISOString(),
@@ -38,12 +39,12 @@ router.post("/:eventId/scanner-links", async (req, res, next) => {
     const rawToken = newOpaqueToken(32);
     const expiresAt = new Date(Date.now() + parsed.data.expiresInHours * 60 * 60 * 1000);
     const created = await pool.query<{ id: string }>(
-      `INSERT INTO public.scanner_links(event_id,label,token_hash,token_ciphertext,expires_at,created_by)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [event.id, parsed.data.label, hashToken(rawToken), encryptScannerLinkToken(rawToken), expiresAt, organizerId(req)],
+      `INSERT INTO public.scanner_links(event_id,label,token_hash,token_ciphertext,expires_at,created_by,mode)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [event.id, parsed.data.label, hashToken(rawToken), encryptScannerLinkToken(rawToken), expiresAt, organizerId(req), parsed.data.mode],
     );
     const url = `/scanner/${event.id}?token=${encodeURIComponent(rawToken)}`;
-    return sendJson(res, scannerLinkIssueResponseSchema, { id: created.rows[0]!.id, eventId: event.id, label: parsed.data.label, url, expiresAt: expiresAt.toISOString() }, 201);
+    return sendJson(res, scannerLinkIssueResponseSchema, { id: created.rows[0]!.id, eventId: event.id, label: parsed.data.label, mode: parsed.data.mode, url, expiresAt: expiresAt.toISOString() }, 201);
   } catch (error) { next(error); }
 });
 

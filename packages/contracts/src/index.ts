@@ -53,8 +53,15 @@ export const checkInInputSchema = z.object({
   token: z.string().trim().min(16).max(256),
   direction: scanDirectionSchema.optional().default("auto"),
 }).strict();
+export const scannerLinkModeSchema = z.enum(["in", "out", "both", "auto"]);
+export type ScannerLinkMode = z.infer<typeof scannerLinkModeSchema>;
+export const scannerLinkModeLabels = { in: "Check-in only", out: "Check-out only", both: "Check-in & check-out", auto: "Auto (toggle in / out)" } as const;
+export function scannerDirectionForMode(mode: ScannerLinkMode, direction: z.infer<typeof scanDirectionSchema>) {
+  return mode === "both" ? (direction === "out" ? "out" : "in") : mode;
+}
 export const scannerLinkInputSchema = z.object({
   label: z.string().trim().min(1).max(80).default("Front gate"),
+  mode: scannerLinkModeSchema.default("both"),
   expiresInHours: z.number().int().min(1).max(720).default(72),
 }).strict();
 type ScannerBrandingColors = { accentColor: string; backgroundColor: string; panelColor: string; textColor: string; mutedTextColor: string };
@@ -257,6 +264,7 @@ export const eventDashboardSchema = z.object({ event: eventSummarySchema, summar
 export const scannerLinkIssueResponseSchema = z.object({
   id: uuidSchema,
   eventId: uuidSchema,
+  mode: scannerLinkModeSchema.default("both"),
   label: z.string().min(1).max(80),
   url: z.string().min(1).max(2048),
   expiresAt: isoTimestampSchema,
@@ -265,6 +273,7 @@ export const scannerLinkCopyResponseSchema = z.object({ url: z.string().min(1).m
 export const scannerLinkListItemSchema = z.object({
   id: uuidSchema,
   eventId: uuidSchema,
+  mode: scannerLinkModeSchema.default("both"),
   label: z.string().min(1).max(80),
   expiresAt: isoTimestampSchema.nullable(),
   revokedAt: isoTimestampSchema.nullable(),
@@ -275,6 +284,7 @@ export const scannerLinkListSchema = z.array(scannerLinkListItemSchema);
 export const scannerSessionSchema = z.object({
   eventId: uuidSchema,
   eventName: z.string().min(2).max(160),
+  mode: scannerLinkModeSchema.default("both"),
   label: z.string().min(1).max(80),
   expiresAt: isoTimestampSchema.nullable(),
   scanMode: scanModeSchema.optional().default("checkin_only"),

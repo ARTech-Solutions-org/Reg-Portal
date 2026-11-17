@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS public.scanner_links (
 );
 
 ALTER TABLE public.scanner_links ADD COLUMN IF NOT EXISTS token_ciphertext text;
+ALTER TABLE public.scanner_links ADD COLUMN IF NOT EXISTS mode text NOT NULL DEFAULT 'both' CHECK (mode IN ('in', 'out', 'both', 'auto'));
 
 CREATE INDEX IF NOT EXISTS scanner_links_event_idx ON public.scanner_links(event_id, created_at DESC);
 
