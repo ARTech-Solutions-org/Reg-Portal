@@ -436,3 +436,23 @@ export type EventRegistrationSettingsResponse = z.infer<typeof eventRegistration
 export type PublicEventRegistrationInfo = z.infer<typeof publicEventRegistrationInfoSchema>;
 export type PublicRegistrationInput = z.infer<typeof publicRegistrationInputSchema>;
 export type PublicRegistrationResult = z.infer<typeof publicRegistrationResultSchema>;
+
+// Shared by browser exports and server-generated attendee badges.
+export function centeredBadgeText(
+  text: string,
+  font: { widthOfTextAtSize(text: string, size: number): number; heightAtSize(size: number, options: { descender: boolean }): number },
+  box: { x: number; y: number; width: number; height: number; fontSize: number },
+) {
+  const content = text.replace(/\s+/g, " ").trim();
+  const textWidth = font.widthOfTextAtSize(content, box.fontSize);
+  const fullHeight = font.heightAtSize(box.fontSize, { descender: true });
+  const size = box.fontSize * Math.min(1, box.width / Math.max(textWidth, 1), box.height / Math.max(fullHeight, 1));
+  const ascent = font.heightAtSize(size, { descender: false });
+  const height = font.heightAtSize(size, { descender: true });
+  return {
+    content,
+    x: box.x + (box.width - font.widthOfTextAtSize(content, size)) / 2,
+    y: box.y + (box.height - height) / 2 + height - ascent,
+    size,
+  };
+}

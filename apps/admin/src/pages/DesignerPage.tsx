@@ -8,7 +8,7 @@ import { Rnd } from "react-rnd";
 import { ArrowDownToLine, ArrowLeft, ArrowLeftRight, FileImage, FileText, ImagePlus, LoaderCircle, LockKeyhole, Minus, MousePointer2, Plus, QrCode, Save, Trash2, Type, UploadCloud } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { apiErrorResponseSchema, attendeeFieldListSchema, attendeeListSchema, badgeLayoutGetResponseSchema, badgeLayoutPutResponseSchema, badgeLayoutSchema, badgeTemplateGetResponseSchema, badgeTemplatePutResponseSchema, badgeTemplateUploadMetadataSchema, contractJson, eventSummarySchema, qrDataResponseSchema, type Attendee, type BadgeElement, type BadgeLayout, type BadgeLayoutGetResponse, type BadgeTemplateGetResponse, type EventSummary } from "@eventdesk/contracts";
+import { centeredBadgeText, apiErrorResponseSchema, attendeeFieldListSchema, attendeeListSchema, badgeLayoutGetResponseSchema, badgeLayoutPutResponseSchema, badgeLayoutSchema, badgeTemplateGetResponseSchema, badgeTemplatePutResponseSchema, badgeTemplateUploadMetadataSchema, contractJson, eventSummarySchema, qrDataResponseSchema, type Attendee, type BadgeElement, type BadgeLayout, type BadgeLayoutGetResponse, type BadgeTemplateGetResponse, type EventSummary } from "@eventdesk/contracts";
 import { apiContract, ApiError } from "@/lib/api";
 import { EventTabs, PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -323,7 +323,8 @@ export function DesignerPage() {
           const content = valueForField(element.field, attendee, eventQuery.data?.name, element.text);
           const color = element.color ?? "#132035";
           const pdfColor = rgb(parseInt(color.slice(1, 3), 16) / 255, parseInt(color.slice(3, 5), 16) / 255, parseInt(color.slice(5, 7), 16) / 255);
-          page.drawText(content, { x, y: y + Math.max(0, drawHeight - (element.fontSize ?? 16)), size: element.fontSize ?? 16, font, color: pdfColor, maxWidth: drawWidth, lineHeight: (element.fontSize ?? 16) * 1.2 });
+          const centered = centeredBadgeText(content, font, { x, y, width: drawWidth, height: drawHeight, fontSize: element.fontSize ?? 16 });
+          page.drawText(centered.content, { x: centered.x, y: centered.y, size: centered.size, font, color: pdfColor });
         }
       }
       const bytes = await pdf.save();

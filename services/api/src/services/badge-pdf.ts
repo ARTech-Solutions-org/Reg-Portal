@@ -1,6 +1,6 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import QRCode from "qrcode";
-import type { BadgeElement, BadgeLayout } from "@eventdesk/contracts";
+import { centeredBadgeText, type BadgeElement, type BadgeLayout } from "@eventdesk/contracts";
 
 export interface BadgePdfAttendee {
   name: string | null;
@@ -100,14 +100,13 @@ export async function buildBadgePdf({ layout, attendees, eventName, qrTokens, te
         Number.parseInt(color.slice(5, 7), 16) / 255,
       );
       const fontSize = element.fontSize ?? 16;
-      page.drawText(content, {
-        x,
-        y: y + Math.max(0, drawHeight - fontSize),
-        size: fontSize,
+      const centered = centeredBadgeText(content, font, { x, y, width: drawWidth, height: drawHeight, fontSize });
+      page.drawText(centered.content, {
+        x: centered.x,
+        y: centered.y,
+        size: centered.size,
         font,
         color: pdfColor,
-        maxWidth: drawWidth,
-        lineHeight: fontSize * 1.2,
       });
     }
   }
