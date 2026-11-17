@@ -107,11 +107,11 @@ function ScannerDesk() {
 
   useEffect(() => {
     const queryToken = new URLSearchParams(window.location.search).get("token");
-    const savedToken = queryToken || sessionStorage.getItem(storageKey) || "";
-    if (queryToken) {
-      sessionStorage.setItem(storageKey, queryToken);
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
+    let savedToken = queryToken ?? "";
+    try {
+      if (queryToken) sessionStorage.setItem(storageKey, queryToken);
+      else savedToken = sessionStorage.getItem(storageKey) ?? "";
+    } catch { /* A complete scanner URL also works when browser storage is disabled. */ }
     setToken(savedToken);
   }, [eventId, storageKey]);
 
@@ -321,7 +321,13 @@ function ScannerDesk() {
           </h1>
           <p className="scanner-muted scanner-wrap-anywhere mt-2 text-sm">
             {session
-              ? `${session.label} · Select whether you are scanning Check-in or Check-out below`
+              ? `${session.label} · ${session.mode === "both"
+                ? "Choose Check-in or Check-out below"
+                : session.mode === "in"
+                ? "Scan guest QR codes to record check-in"
+                : session.mode === "out"
+                ? "Scan guest QR codes to record check-out"
+                : "Scan guest QR codes to automatically record arrival or departure"}`
               : "Staff access uses the private scanner URL—no organizer login is needed."}
           </p>
         </section>
@@ -547,18 +553,7 @@ function ScannerDesk() {
                       </div>
                     </div>
                   </div>
-                ) : (
-                  <div className="scanner-panel rounded-2xl border border-white/10 p-5">
-                    <p className="font-display text-lg font-semibold">Ready at the gate</p>
-                    <p className="scanner-muted mt-2 text-sm leading-6">
-                      Select Check-in or Check-out mode, then point the camera at any attendee QR code.
-                    </p>
-                    <div className="scanner-muted mt-4 flex items-center gap-2 text-xs">
-                      <Check className="h-3.5 w-3.5 text-emerald-400" />
-                      Realtime synced to analytics
-                    </div>
-                  </div>
-                )}
+                ) : null}
                 {busy && (
                   <div className="scanner-panel scanner-muted flex items-center gap-2 rounded-xl border border-white/10 px-4 py-3 text-xs">
                     <LoaderCircle className="scanner-accent h-4 w-4 animate-spin" />
