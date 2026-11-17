@@ -19,3 +19,9 @@ button { cursor: pointer; }
 .scanner-theme .scanner-input { background-color: var(--scanner-panel, #151f2e); color: var(--scanner-text, #f4f6fb); }
 .scanner-theme .scanner-input::placeholder { color: var(--scanner-muted, #9aa7bc); opacity: 1; }
 .scanner-theme .scanner-wrap-anywhere { overflow-wrap: anywhere; }
+
+.scanner-camera { color: #f4f6fb; }
+.scanner-theme .scanner-result[data-status="valid"] { background: #ecfdf5; color: #064e3b; border-color: #34d399; }
+.scanner-theme .scanner-result[data-status="duplicate"] { background: #fffbeb; color: #78350f; border-color: #fbbf24; }
+.scanner-theme .scanner-result[data-status="invalid"] { background: #fff1f2; color: #881337; border-color: #fb7185; }
+.scanner-result [class*="text-"] { color: inherit; }

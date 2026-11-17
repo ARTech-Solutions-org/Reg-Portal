@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
-import { BrowserQRCodeReader, type IScannerControls } from "@zxing/browser";
+import { startCameraScanner, ScanGate, type CameraScanner } from "./lib/camera-scanner";
 import {
   ArrowLeft,
   ArrowLeftRight,
@@ -50,6 +50,7 @@ function ScannerDesk() {
   const [session, setSession] = useState<ScannerSession | null>(null);
   const [branding, setBranding] = useState<ScannerBranding>(defaultScannerBranding);
   const [sessionError, setSessionError] = useState("");
+  const [startingCamera, setStartingCamera] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -83,11 +84,9 @@ function ScannerDesk() {
 
   const [recent, setRecent] = useState<RecentScan[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const controlsRef = useRef<IScannerControls | null>(null);
+  const controlsRef = useRef<CameraScanner | null>(null);
   const busyRef = useRef(false);
-  const resumeRef = useRef(false);
-  const readerRef = useRef<BrowserQRCodeReader | null>(null);
-  if (!readerRef.current) readerRef.current = new BrowserQRCodeReader();
+  const scanGate = useRef(new ScanGate());
   const storageKey = `eventdesk:scanner:${eventId}`;
 
   useEffect(() => {
@@ -126,16 +125,14 @@ function ScannerDesk() {
     setCameraOn(false);
   }, []);
 
-  const processCode = useCallback(async (code: string) => {
+  const processCode = useCallback(async (code: string, fromCamera = false) => {
     const clean = code.trim();
     if (!clean || !token || !session || busyRef.current) return;
+    if (fromCamera && !scanGate.current.accept(clean, performance.now())) return;
     busyRef.current = true;
     setBusy(true);
     setResult(null);
     setCameraError("");
-    controlsRef.current?.stop();
-    controlsRef.current = null;
-    setCameraOn(false);
     try {
       const response = await scannerApiContract(`/events/${eventId}/check-ins`, token, checkInResultSchema, {
         method: "POST",
@@ -155,36 +152,54 @@ function ScannerDesk() {
       }, ...old].slice(0, 5));
       if (response.status === "valid" && "vibrate" in navigator) navigator.vibrate?.(60);
     } catch (error) {
+      scanGate.current.retryAfter(performance.now());
       setResult({ status: "invalid", message: error instanceof ScannerApiError ? error.message : "Check-in could not be recorded. Please retry.", attendee: null });
     } finally {
       setBusy(false);
       busyRef.current = false;
       setManualCode("");
-      if (resumeRef.current) window.setTimeout(() => { void startCameraRef.current?.(); }, 1_700);
     }
   }, [direction, eventId, token, session]);
   const processRef = useRef(processCode);
   processRef.current = processCode;
 
   const startCamera = useCallback(async () => {
-    if (!videoRef.current || !token || busyRef.current) return;
+    if (!videoRef.current || !token || !session || controlsRef.current) return;
     setCameraError("");
-    resumeRef.current = true;
+    setStartingCamera(true);
+    scanGate.current.reset();
+    const scanner = startCameraScanner(videoRef.current, (code) => {
+      if (busyRef.current) {
+        scanGate.current.observe(code.trim(), performance.now());
+        return;
+      }
+      void processRef.current(code, true);
+    });
+    controlsRef.current = scanner;
     try {
-      const controls = await readerRef.current!.decodeFromVideoDevice(undefined, videoRef.current, (scanResult) => {
-        if (scanResult) void processRef.current(scanResult.getText());
-      });
-      controlsRef.current = controls;
-      setCameraOn(true);
+      await scanner.ready;
+      if (controlsRef.current === scanner) setCameraOn(true);
     } catch (error) {
-      resumeRef.current = false;
-      setCameraOn(false);
-      setCameraError(error instanceof Error && error.name === "NotAllowedError" ? "Camera access was blocked. Allow camera permissions or use manual code entry." : "No usable camera was found. You can still enter a guest code manually.");
+      if (controlsRef.current === scanner) {
+        controlsRef.current = null;
+        setCameraOn(false);
+        setCameraError(error instanceof Error && error.name === "NotAllowedError"
+          ? "Allow camera access in browser settings, then try again."
+          : "Could not start the camera. Close other camera apps and try again, or enter the code manually.");
+      }
+    } finally {
+      setStartingCamera(false);
     }
-  }, [token]);
-  const startCameraRef = useRef(startCamera);
-  startCameraRef.current = startCamera;
-  useEffect(() => () => { resumeRef.current = false; controlsRef.current?.stop(); }, []);
+  }, [token, session]);
+  useEffect(() => {
+    const pauseWhenHidden = () => { if (document.hidden) stopCamera(); };
+    document.addEventListener("visibilitychange", pauseWhenHidden);
+    return () => {
+      document.removeEventListener("visibilitychange", pauseWhenHidden);
+      controlsRef.current?.stop();
+      controlsRef.current = null;
+    };
+  }, [stopCamera, eventId, token]);
 
   if (!eventId) return <Navigate to="/" replace />;
 
@@ -357,13 +372,13 @@ function ScannerDesk() {
 
             <section className="grid gap-4 lg:grid-cols-[1.2fr_.8fr]">
               <div className="overflow-hidden rounded-[24px] border border-white/10 bg-black shadow-2xl shadow-black/20">
-                <div className="relative aspect-[4/3] overflow-hidden bg-[#0a101b]">
+                <div className="scanner-camera relative aspect-[4/3] overflow-hidden bg-[#0a101b]">
                   <video
                     ref={videoRef}
                     muted
                     playsInline
                     autoPlay
-                    className={`h-full w-full object-cover ${cameraOn ? "" : "hidden"}`}
+                    className="h-full w-full object-contain"
                   />
 
                   {/* Mode Badge Indicator on top of Camera */}
@@ -393,7 +408,7 @@ function ScannerDesk() {
                     </span>
                   </div>
 
-                  {cameraOn ? (
+                  {cameraOn || startingCamera ? (
                     <div className="pointer-events-none absolute inset-0">
                       <div className="absolute left-1/2 top-[17%] aspect-square w-[74%] max-h-[68%] -translate-x-1/2 border border-white/70">
                         <span className="scanner-accent-border absolute -left-px -top-px h-5 w-5 border-l-[3px] border-t-[3px]" />
@@ -433,7 +448,6 @@ function ScannerDesk() {
                   {cameraOn ? (
                     <button
                       onClick={() => {
-                        resumeRef.current = false;
                         stopCamera();
                       }}
                       className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/5"
@@ -442,11 +456,12 @@ function ScannerDesk() {
                     </button>
                   ) : (
                     <button
+                      disabled={startingCamera}
                       onClick={() => void startCamera()}
                       className="scanner-button inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold"
                     >
                       <Camera className="h-3.5 w-3.5" />
-                      Start camera
+                      {startingCamera ? "Starting camera…" : "Start camera"}
                     </button>
                   )}
                 </div>
@@ -454,7 +469,7 @@ function ScannerDesk() {
 
               <div className="space-y-4">
                 {result ? (
-                  <div aria-live="polite" className={`rounded-2xl border p-5 ${resultTone}`}>
+                  <div aria-live="polite" className={`scanner-result rounded-2xl border p-5 ${resultTone}`} data-status={result.status}>
                     <div className="flex items-start gap-3">
                       <ResultIcon className="mt-0.5 h-5 w-5 shrink-0" />
                       <div className="min-w-0 flex-1">
