@@ -287,7 +287,7 @@ function ScannerDesk() {
           <div className="flex min-w-0 flex-wrap items-center gap-3">
             <div className="flex max-w-full flex-wrap gap-1.5">
               {(logos.length ? logos : [MARK]).map((logo, index) => (
-                <img key={index} src={logo} className="h-10 w-10 rounded-xl bg-white/5 p-1 object-contain" alt={`${branding.brandName} logo ${index + 1}`} />
+                <img key={index} src={logo} className="shrink-0 rounded-xl bg-white/5 p-1 object-contain" style={{ width: branding.logoSize ?? 40, height: branding.logoSize ?? 40 }} alt={`${branding.brandName} logo ${index + 1}`} />
               ))}
             </div>
             <div className="min-w-0">
