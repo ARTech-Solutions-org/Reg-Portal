@@ -60,6 +60,68 @@ describe("public scanner check-in route", () => {
   });
 });
 
+
+describe("attendee import and QR issuance", () => {
+  it("saves only file data, then generates a QR that stays stable on retry", async () => {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("The test server did not bind a TCP port.");
+    const base = `http://127.0.0.1:${address.port}/api/events/${eventId}/attendees`;
+    const post = (route: string, body: unknown) => fetch(`${base}/${route}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: organizerCookie() },
+      body: JSON.stringify(body),
+    });
+    const suffix = eventId.replaceAll("-", "");
+    const event = { id: eventId, schema_name: `project_${suffix}`, attendee_table_name: `attendees_${suffix}`, checkin_table_name: `checkins_${suffix}` };
+    const attendee = {
+      id: "",
+      name: null,
+      email: null,
+      ticket_type: null,
+      custom_fields: { "القسم": "الدعم", Code: "0007" },
+      checked_in_at: null,
+      created_at: new Date("2026-09-30T11:00:00.000Z"),
+      qr_token_ciphertext: null as string | null,
+    };
+    queryMock.mockImplementation(async (sql: string, params: [string[], ...unknown[]]) => {
+      if (sql.includes("public.organizers")) return { rows: [{ id: organizerId, username: "owner" }] };
+      if (sql.includes("public.project_memberships")) return { rows: [event] };
+      expect(sql).toContain("(id, name, email, ticket_type, custom_fields)");
+      expect(sql).not.toContain("qr_token");
+      expect(params.slice(1)).toEqual([[null], [null], [null], [JSON.stringify(attendee.custom_fields)], eventId, ["القسم", "Code"]]);
+      attendee.id = params[0][0]!;
+      return { rows: [{ ...attendee, qr_issued: false }] };
+    });
+    const saved = await post("import", { attendees: [{ customFields: attendee.custom_fields }] });
+    expect(saved.status).toBe(201);
+    expect(await saved.json()).toEqual([{
+      id: attendee.id, name: null, email: null, ticketType: null, customFields: attendee.custom_fields,
+      checkedInAt: null, createdAt: attendee.created_at.toISOString(), qrIssued: false,
+    }]);
+    expect(connectMock).not.toHaveBeenCalled();
+
+    const transaction = vi.fn(async (sql: string, params?: string[][]) => {
+      if (sql.includes("FOR UPDATE")) return { rows: [{ ...attendee }] };
+      if (sql.startsWith("UPDATE")) attendee.qr_token_ciphertext = params?.[2]?.[0] ?? null;
+      return { rows: [] };
+    });
+    connectMock.mockResolvedValue({ query: transaction, release: vi.fn() });
+    const issued = await post("issue-qr", { attendeeIds: [attendee.id] });
+    expect(issued.status).toBe(200);
+    const result = await issued.json();
+    expect(result).toMatchObject({
+      count: 1,
+      attendees: [{ attendee: { id: attendee.id, qrIssued: true }, qrDataUrl: expect.stringMatching(/^data:image\/png;base64,/) }],
+    });
+    expect(attendee.qr_token_ciphertext).toMatch(/^v1\./);
+
+    const retried = await post("issue-qr", { attendeeIds: [attendee.id] });
+    expect(retried.status).toBe(200);
+    expect(await retried.json()).toEqual(result);
+    expect(transaction.mock.calls.filter(([sql]) => sql.startsWith("UPDATE"))).toHaveLength(1);
+  });
+});
+
 describe("scanner branding route", () => {
   it("serves only the event's public branding without organizer login", async () => {
     const address = server.address();
@@ -77,7 +139,7 @@ describe("scanner branding route", () => {
   it("returns a saved custom theme and update timestamp to the public staff scanner", async () => {
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("The test API server did not bind a TCP port.");
-    const savedBranding = { ...defaultScannerBranding, brandName: "Northstar Summit", accentColor: "#7ab0ff" };
+    const savedBranding = { ...defaultScannerBranding, brandName: "Northstar Summit", accentColor: "#7ab0ff", additionalLogoDataUrls: ["data:image/jpeg;base64,/9j/"] };
     const updatedAt = new Date("2026-09-30T09:00:00.000Z");
     queryMock.mockReset()
       .mockResolvedValueOnce({ rows: [{ id: eventId }] })
@@ -106,7 +168,13 @@ describe("scanner branding route", () => {
   it("allows an organizer to save branding only after matching event membership", async () => {
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("The test API server did not bind a TCP port.");
-    const branding = { ...defaultScannerBranding, brandName: "Northstar Summit", accentColor: "#7ab0ff" };
+    const branding = {
+      ...defaultScannerBranding,
+      brandName: "Northstar Summit",
+      accentColor: "#7ab0ff",
+      logoDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+      additionalLogoDataUrls: ["data:image/jpeg;base64,/9j/"],
+    };
     const updatedAt = new Date("2026-09-30T10:00:00.000Z");
     queryMock.mockReset()
       .mockResolvedValueOnce({ rows: [{ id: organizerId, username: "owner", display_name: "Event Owner" }] })
@@ -124,7 +192,8 @@ describe("scanner branding route", () => {
     expect(queryMock.mock.calls[1]?.[0]).toContain("JOIN public.project_memberships");
     expect(queryMock.mock.calls[1]?.[1]).toEqual([eventId, organizerId]);
     expect(queryMock.mock.calls[2]?.[0]).toContain("INSERT INTO public.scanner_branding");
-    expect(queryMock.mock.calls[2]?.[1]).toEqual([eventId, JSON.stringify(branding), organizerId]);
+    const [savedEventId, savedTheme, savedBy] = queryMock.mock.calls[2]![1];
+    expect([savedEventId, JSON.parse(savedTheme), savedBy]).toEqual([eventId, branding, organizerId]);
   });
 
   it("does not write branding for an event without the organizer's membership", async () => {

@@ -26,17 +26,19 @@ router.get("/:eventId/attendees/:attendeeId/badge.pdf", async (req, res, next) =
 
     const { schema, attendees } = tenantSqlNames(event);
     const attendeeResult = await pool.query<{
-      name: string;
+      name: string | null;
       email: string | null;
-      ticket_type: string;
+      ticket_type: string | null;
       custom_fields: Record<string, string> | null;
-      qr_token_ciphertext: string;
+      qr_token_ciphertext: string | null;
     }>(
       `SELECT name,email,ticket_type,custom_fields,qr_token_ciphertext FROM ${schema}.${attendees} WHERE id=$1 LIMIT 1`,
       [req.params.attendeeId],
     );
     const attendee = attendeeResult.rows[0];
     if (!attendee) return sendJson(res, apiErrorResponseSchema, { error: "Attendee not found for this event." }, 404);
+
+    if (!attendee.qr_token_ciphertext) return sendJson(res, apiErrorResponseSchema, { error: "Generate the attendee QR code before downloading a badge." }, 409);
 
     const [layoutResult, templateResult] = await Promise.all([
       pool.query<{ layout: unknown }>("SELECT layout FROM public.badge_layouts WHERE event_id=$1 LIMIT 1", [event.id]),
@@ -66,7 +68,7 @@ router.get("/:eventId/attendees/:attendeeId/badge.pdf", async (req, res, next) =
     });
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="eventdesk-${fileSlug(attendee.name)}-badge.pdf"`);
+    res.setHeader("Content-Disposition", `attachment; filename="eventdesk-${fileSlug(attendee.name ?? "")}-badge.pdf"`);
     res.setHeader("Cache-Control", "private, no-store");
     return res.status(200).send(Buffer.from(pdfBytes));
   } catch (error) {
@@ -91,11 +93,11 @@ router.post("/:eventId/badges/bulk.pdf", async (req, res, next) => {
     const { schema, attendees } = tenantSqlNames(event);
     const placeholders = body.attendeeIds.map((_, i) => `$${i + 1}`).join(",");
     const attendeeResult = await pool.query<{
-      name: string;
+      name: string | null;
       email: string | null;
-      ticket_type: string;
+      ticket_type: string | null;
       custom_fields: Record<string, string> | null;
-      qr_token_ciphertext: string;
+      qr_token_ciphertext: string | null;
     }>(
       `SELECT name,email,ticket_type,custom_fields,qr_token_ciphertext FROM ${schema}.${attendees} WHERE id IN (${placeholders})`,
       body.attendeeIds,
@@ -126,7 +128,11 @@ router.post("/:eventId/badges/bulk.pdf", async (req, res, next) => {
       ticketType: row.ticket_type,
       customFields: row.custom_fields ?? {},
     }));
-    const qrTokens = attendeeResult.rows.map((row) => decryptToken(row.qr_token_ciphertext));
+    const qrTokens = [];
+    for (const row of attendeeResult.rows) {
+      if (!row.qr_token_ciphertext) return sendJson(res, apiErrorResponseSchema, { error: "Generate QR codes for all selected attendees before downloading badges." }, 409);
+      qrTokens.push(decryptToken(row.qr_token_ciphertext));
+    }
 
     const pdfBytes = await buildBadgePdf({
       layout: parsedLayout.data,

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Camera, Eye, ImagePlus, Palette, RotateCcw, Save, ShieldCheck } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { contractJson, defaultScannerBranding, contrastRatio, relativeLuminance, scannerAccentForegroundColor, scannerBrandingGetResponseSchema, scannerBrandingPutResponseSchema, scannerBrandingSchema, type ScannerBranding } from "@eventdesk/contracts";
+import { contractJson, defaultScannerBranding, contrastRatio, relativeLuminance, maxScannerLogos, scannerLogoDataUrls, scannerAccentForegroundColor, scannerBrandingGetResponseSchema, scannerBrandingPutResponseSchema, scannerBrandingSchema, type ScannerBranding } from "@eventdesk/contracts";
 import { apiContract, ApiError } from "@/lib/api";
 import { useEventDashboard } from "@/hooks/useEventDashboard";
 import { EventTabs, PageHeader } from "@/components/PageHeader";
@@ -38,9 +38,14 @@ function getContrastAdvice(fg: string, bg: string, label: string, bgLabel: strin
 
 export function ScannerBrandingPage() {
   const { eventId = "" } = useParams();
+  return <EventScannerBranding key={eventId} eventId={eventId} />;
+}
+
+function EventScannerBranding({ eventId }: { eventId: string }) {
   const queryClient = useQueryClient();
   const eventQuery = useEventDashboard(eventId);
   const fileInput = useRef<HTMLInputElement>(null);
+  const [readingLogos, setReadingLogos] = useState(false);
   const [form, setForm] = useState<ScannerBranding>(defaultScannerBranding);
   const branding = useQuery({
     queryKey: ["scanner-branding", eventId],
@@ -64,27 +69,39 @@ export function ScannerBrandingPage() {
 
   const dirty = Boolean(branding.data && JSON.stringify(form) !== JSON.stringify(branding.data.branding));
   const update = <K extends keyof ScannerBranding>(key: K, value: ScannerBranding[K]) => setForm((current) => ({ ...current, [key]: value }));
-  const selectLogo = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0];
+  const logos = scannerLogoDataUrls(form);
+  const setLogos = (logos: string[]) => setForm((current) => ({
+    ...current,
+    logoDataUrl: logos[0] ?? null,
+    additionalLogoDataUrls: logos.length > 1 ? logos.slice(1) : undefined,
+  }));
+  const selectLogos = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.currentTarget.files ?? []);
     event.currentTarget.value = "";
-    if (!file) return;
-    if (!("image/png" === file.type || file.type === "image/jpeg" || file.type === "image/webp")) {
-      toast.error("Choose a PNG, JPEG or WebP logo.");
+    if (!files.length) return;
+    if (files.length + logos.length > maxScannerLogos) {
+      toast.error(`Add up to ${maxScannerLogos} logos per event.`);
       return;
     }
-    if (file.size > MAX_LOGO_BYTES) {
-      toast.error("Keep the logo under 256 KB for fast scanner loading.");
+    if (files.some((file) => !["image/png", "image/jpeg", "image/webp"].includes(file.type))) {
+      toast.error("Choose PNG, JPEG or WebP logos.");
       return;
     }
+    if (files.some((file) => file.size > MAX_LOGO_BYTES)) {
+      toast.error("Each logo must be at most 256 KB.");
+      return;
+    }
+
+    setReadingLogos(true);
     try {
-      const logoDataUrl = await readFileAsDataUrl(file);
-      if (logoDataUrl.length > 350_000 || !/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(logoDataUrl)) { toast.error("That logo file could not be used."); return; }
-      setForm((current) => ({ ...current, logoDataUrl }));
+      const selected = await Promise.all(files.map(readFileAsDataUrl));
+      setLogos([...logos, ...selected]);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "The selected logo could not be read.");
+      toast.error(error instanceof Error ? error.message : "Could not read the selected logos.");
+    } finally {
+      setReadingLogos(false);
     }
   };
-
   return <div className="page-enter">
     <PageHeader eyebrow="Event / scanner appearance" title="Scanner design" description={`${eventQuery.data?.event.name ?? "Event"} · customize the staff-facing scanner without changing attendee data or staff access links.`} action={<Link to={`/admin/events/${eventId}/links`}><Button variant="outline" size="sm"><ArrowLeft className="h-4 w-4" />Scanner links</Button></Link>} />
     <EventTabs eventId={eventId} />
@@ -92,20 +109,24 @@ export function ScannerBrandingPage() {
       <Card>
         <CardContent className="p-5 sm:p-6">
           <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-accent text-primary"><Palette className="h-5 w-5" /></div><div><h2 className="panel-title">Event scanner identity</h2><p className="text-xs text-muted-foreground">Your changes are saved only to this event.</p></div></div>
-          {branding.isLoading ? <p className="mt-6 text-sm text-muted-foreground">Loading event branding…</p> : branding.isError ? <div role="alert" className="mt-5 rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">Could not load scanner branding. Refresh the page and try again.</div> : <form className="mt-6 space-y-6" onSubmit={(event) => { event.preventDefault(); save.mutate(); }}>
+          {branding.isLoading ? <p className="mt-6 text-sm text-muted-foreground">Loading event branding…</p> : branding.isError ? <div role="alert" className="mt-5 rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">Could not load scanner branding. Refresh the page and try again.</div> : <form className="mt-6 space-y-6" onSubmit={(event) => { event.preventDefault(); if (!readingLogos && !save.isPending) save.mutate(); }}>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block"><span className="label-caps mb-2 block">Brand name</span><input className="input-control" value={form.brandName} maxLength={60} onChange={(event) => update("brandName", event.currentTarget.value)} required /></label>
               <label className="block"><span className="label-caps mb-2 block">Descriptor</span><input className="input-control" value={form.brandTagline} maxLength={80} onChange={(event) => update("brandTagline", event.currentTarget.value)} placeholder="Event check-in" /></label>
             </div>
 
             <section className="rounded-2xl border border-border bg-muted/30 p-4">
-              <div className="flex items-center gap-3">
-                <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-white p-1.5"><img src={form.logoDataUrl ?? MARK} alt="" className="max-h-full max-w-full object-contain" /></div>
-                <div className="min-w-0 flex-1"><p className="text-sm font-semibold">Logo</p><p className="mt-1 text-xs leading-5 text-muted-foreground">PNG, JPEG or WebP · maximum 256 KB. The logo is stored with this event's theme.</p></div>
-                <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(event) => void selectLogo(event)} aria-label="Upload a scanner logo" />
-                <Button type="button" variant="outline" size="sm" onClick={() => fileInput.current?.click()}><ImagePlus className="h-4 w-4" />Upload</Button>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div><h3 className="text-sm font-semibold">Scanner logos</h3><p className="mt-1 text-xs text-muted-foreground">Up to {maxScannerLogos} PNG, JPEG or WebP images, 256 KB each.</p></div>
+                <input ref={fileInput} type="file" multiple accept="image/png,image/jpeg,image/webp" className="sr-only" disabled={readingLogos || save.isPending || logos.length >= maxScannerLogos} onChange={(event) => void selectLogos(event)} aria-label="Upload scanner logos" />
+                <Button type="button" variant="outline" size="sm" disabled={readingLogos || save.isPending || logos.length >= maxScannerLogos} onClick={() => fileInput.current?.click()}><ImagePlus className="h-4 w-4" />{readingLogos ? "Reading…" : "Add logos"}</Button>
               </div>
-              {form.logoDataUrl && <Button className="mt-3" type="button" variant="ghost" size="sm" onClick={() => update("logoDataUrl", null)}>Remove custom logo</Button>}
+              {logos.length > 0 && <ul className="mt-4 flex flex-wrap gap-3">
+                {logos.map((logo, index) => <li key={index} className="flex flex-col items-center gap-1">
+                  <div className="grid h-16 w-16 place-items-center rounded-xl border border-border bg-white p-2"><img src={logo} alt={`Scanner logo ${index + 1}`} className="h-full w-full object-contain" /></div>
+                  <Button type="button" variant="ghost" size="sm" disabled={readingLogos || save.isPending} aria-label={`Remove logo ${index + 1}`} onClick={() => setLogos(logos.filter((_, position) => index !== position))}>Remove</Button>
+                </li>)}
+              </ul>}
             </section>
 
             <section><div className="mb-3"><h3 className="text-sm font-semibold">Color palette</h3><p className="mt-1 text-xs text-muted-foreground">Choose a brand palette; scan outcomes remain green, amber and red for clarity.</p></div><div className="divide-y divide-border rounded-2xl border border-border">
@@ -155,7 +176,7 @@ export function ScannerBrandingPage() {
               </div>
             </section>
             
-            <div className="flex flex-wrap gap-2 border-t border-border pt-4"><Button type="submit" disabled={!dirty || save.isPending || !form.brandName.trim()}><Save className="h-4 w-4" />{save.isPending ? "Saving…" : "Save scanner design"}</Button><Button type="button" variant="outline" disabled={save.isPending} onClick={() => setForm(defaultScannerBranding)}><RotateCcw className="h-4 w-4" />Reset to default</Button>{branding.data?.updatedAt && <span className="self-center text-xs text-muted-foreground">Last saved {new Date(branding.data.updatedAt).toLocaleString()}</span>}</div>
+            <div className="flex flex-wrap gap-2 border-t border-border pt-4"><Button type="submit" disabled={!dirty || readingLogos || save.isPending || !form.brandName.trim()}><Save className="h-4 w-4" />{save.isPending ? "Saving…" : "Save scanner design"}</Button><Button type="button" variant="outline" disabled={readingLogos || save.isPending} onClick={() => setForm(defaultScannerBranding)}><RotateCcw className="h-4 w-4" />Reset to default</Button>{branding.data?.updatedAt && <span className="self-center text-xs text-muted-foreground">Last saved {new Date(branding.data.updatedAt).toLocaleString()}</span>}</div>
           </form>}
         </CardContent>
       </Card>
@@ -163,7 +184,7 @@ export function ScannerBrandingPage() {
       <aside className="xl:sticky xl:top-24">
         <div className="mb-3 flex items-center gap-2"><Eye className="h-4 w-4 text-primary" /><h2 className="panel-title">Staff preview</h2><span className="ml-auto font-mono text-[10px] text-muted-foreground">MOBILE</span></div>
         <div className="mx-auto max-w-[430px] overflow-hidden rounded-[28px] border border-white/10 p-4 shadow-2xl" style={{ backgroundColor: form.backgroundColor, color: form.textColor }}>
-          <header className="flex items-center justify-between gap-3 border-b border-white/10 pb-4"><div className="flex min-w-0 items-center gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/10 p-1.5"><img src={form.logoDataUrl ?? MARK} alt="" className="max-h-full max-w-full object-contain" /></div><div className="min-w-0"><p className="truncate text-xs font-bold tracking-[.14em]">{form.brandName || "Brand name"}</p>{form.brandTagline && <p className="mt-1 truncate font-mono text-[9px] uppercase tracking-[.12em]" style={{ color: form.mutedTextColor }}>{form.brandTagline}</p>}</div></div><span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/10 px-2 py-1.5 text-[9px] font-semibold" style={{ color: form.mutedTextColor }}><ShieldCheck className="h-3 w-3 text-emerald-400" />Staff</span></header>
+          <header className="flex items-center justify-between gap-3 border-b border-white/10 pb-4"><div className="flex min-w-0 flex-wrap items-center gap-3"><div className="flex max-w-full flex-wrap gap-1.5">{(logos.length ? logos : [MARK]).map((logo, index) => <img key={index} src={logo} alt="" className="h-10 w-10 rounded-xl bg-white/10 p-1 object-contain" />)}</div><div className="min-w-0"><p className="truncate text-xs font-bold tracking-[.14em]">{form.brandName || "Brand name"}</p>{form.brandTagline && <p className="mt-1 truncate font-mono text-[9px] uppercase tracking-[.12em]" style={{ color: form.mutedTextColor }}>{form.brandTagline}</p>}</div></div><span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/10 px-2 py-1.5 text-[9px] font-semibold" style={{ color: form.mutedTextColor }}><ShieldCheck className="h-3 w-3 text-emerald-400" />Staff</span></header>
           <section className="pb-4 pt-5"><p className="font-mono text-[9px] uppercase tracking-[.18em]" style={{ color: form.accentColor }}>Live entrance desk</p><h3 className="mt-2 truncate font-display text-2xl font-semibold">{eventQuery.data?.event.name ?? "Sample event"}</h3><p className="mt-1 text-xs" style={{ color: form.mutedTextColor }}>Front gate · scan each guest's event QR code</p></section>
           <div className="overflow-hidden rounded-2xl border border-white/10 bg-black"><div className="relative grid aspect-[4/3] place-items-center"><div className="grid h-12 w-12 place-items-center rounded-xl border border-white/10 bg-white/5" style={{ color: form.accentColor }}><Camera className="h-6 w-6" /></div><div className="pointer-events-none absolute left-1/2 top-[19%] aspect-square w-[66%] max-h-[62%] -translate-x-1/2 border border-white/70"><span className="absolute -left-px -top-px h-4 w-4 border-l-[3px] border-t-[3px]" style={{ borderColor: form.accentColor }} /><span className="absolute -right-px -top-px h-4 w-4 border-r-[3px] border-t-[3px]" style={{ borderColor: form.accentColor }} /><span className="absolute -bottom-px -left-px h-4 w-4 border-b-[3px] border-l-[3px]" style={{ borderColor: form.accentColor }} /><span className="absolute -bottom-px -right-px h-4 w-4 border-b-[3px] border-r-[3px]" style={{ borderColor: form.accentColor }} /></div></div><div className="flex items-center justify-between gap-2 border-t border-white/10 p-3" style={{ backgroundColor: form.panelColor }}><span className="truncate font-mono text-[9px]" style={{ color: form.mutedTextColor }}>Camera ready · point at guest QR</span><span className="rounded-lg px-3 py-2 text-[10px] font-semibold" style={{ backgroundColor: form.accentColor, color: scannerAccentForegroundColor(form.accentColor) }}>Start</span></div></div>
           <div className="mt-4 rounded-2xl border border-emerald-300/25 bg-emerald-500/10 p-4 text-emerald-100"><p className="text-xs font-semibold">Check-in complete</p><p className="mt-1 text-[11px] text-emerald-100/75">A clear result with attendee details appears here.</p></div>

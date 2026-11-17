@@ -15,7 +15,7 @@ const DesignerPage = lazy(() => import("@/pages/DesignerPage").then((module) => 
 const PublicAnalyticsPage = lazy(() => import("@/pages/PublicAnalyticsPage").then((module) => ({ default: module.PublicAnalyticsPage })));
 const EventBrandingPage = lazy(() => import("@/pages/EventBrandingPage").then((module) => ({ default: module.EventBrandingPage })));
 const RegistrationSettingsPage = lazy(() => import("@/pages/RegistrationSettingsPage").then((module) => ({ default: module.RegistrationSettingsPage })));
-const PublicRegistrationPage = lazy(() => import("@/pages/PublicRegistrationPage").then((module) => ({ default: module.PublicRegistrationPage })));
+const PublicRegistrationPage = lazy(() => import("@/pages/PublicRegistrationPage"));
 
 function Protected() {
   const { user, loading } = useAuth();

@@ -24,6 +24,7 @@ import {
   defaultScannerBranding,
   scannerAccentForegroundColor,
   scannerBrandingGetResponseSchema,
+  scannerLogoDataUrls,
   scannerSessionSchema,
   type CheckInResult,
   type ScanDirection,
@@ -143,7 +144,7 @@ function ScannerDesk() {
       setResult(response);
       if (response.attendee) setRecent((old) => [{
         id: response.attendee!.id,
-        name: response.attendee!.name,
+        name: response.attendee!.name || "Attendee",
         result: response.status,
         action: response.action,
         scanCount: response.scanCount,
@@ -226,16 +227,18 @@ function ScannerDesk() {
     "--scanner-accent-foreground": scannerAccentForegroundColor(branding.accentColor),
   } as CSSProperties;
 
+  const logos = scannerLogoDataUrls(branding);
+
   return (
     <main className="safe-area scanner-theme min-h-screen px-4 pb-8 pt-5 sm:px-6" style={themeStyle}>
       <div className="mx-auto max-w-[760px]">
         <header className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <img
-              src={branding.logoDataUrl ?? MARK}
-              className="h-10 w-10 shrink-0 rounded-xl bg-white/5 p-1 object-contain"
-              alt={`${branding.brandName} logo`}
-            />
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <div className="flex max-w-full flex-wrap gap-1.5">
+              {(logos.length ? logos : [MARK]).map((logo, index) => (
+                <img key={index} src={logo} className="h-10 w-10 rounded-xl bg-white/5 p-1 object-contain" alt={`${branding.brandName} logo ${index + 1}`} />
+              ))}
+            </div>
             <div className="min-w-0">
               <p className="truncate font-display text-sm font-bold tracking-[.12em]">{branding.brandName}</p>
               {branding.brandTagline && (
@@ -468,7 +471,7 @@ function ScannerDesk() {
                         {result.attendee && (
                           <div className="mt-4 border-t border-current/15 pt-3">
                             <div className="flex items-center justify-between gap-2">
-                              <p className="break-words text-sm font-semibold">{result.attendee.name}</p>
+                              {result.attendee.name && <p className="break-words text-sm font-semibold">{result.attendee.name}</p>}
                               {result.scanCount !== undefined && (
                                 <span className="inline-flex items-center rounded-full bg-white/15 px-2 py-0.5 font-mono text-[11px] font-semibold">
                                   Scan {result.scanCount}
@@ -476,10 +479,11 @@ function ScannerDesk() {
                                 </span>
                               )}
                             </div>
-                            <p className="mt-1 break-words text-xs opacity-75">
-                              {result.attendee.ticketType}
-                              {result.attendee.email ? ` · ${result.attendee.email}` : ""}
-                            </p>
+                            {(result.attendee.ticketType || result.attendee.email) && (
+                              <p className="mt-1 break-words text-xs opacity-75">
+                                {[result.attendee.ticketType, result.attendee.email].filter(Boolean).join(" · ")}
+                              </p>
+                            )}
                             {result.action && (
                               <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium">
                                 {result.action === "check_out" ? (

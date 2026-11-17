@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { defaultScannerBranding, scannerBrandingGetResponseSchema, scannerBrandingPutResponseSchema, scannerBrandingSchema } from "@eventdesk/contracts";
+import { defaultScannerBranding, scannerBrandingGetResponseSchema, scannerBrandingPutResponseSchema, scannerBrandingSchema, scannerLogoDataUrls } from "@eventdesk/contracts";
 import { pool } from "../db/pool.js";
 import { findEventForOrganizer } from "../db/tenant.js";
 import { isValidScannerLogoDataUrl } from "../lib/scanner-branding.js";
@@ -29,8 +29,8 @@ router.get("/:eventId/scanner-branding", async (req, res, next) => {
 router.put("/:eventId/scanner-branding", requireOrganizer, async (req, res, next) => {
   if (!requireUuid(req.params.eventId)) { res.status(400).json({ error: "Invalid event ID." }); return; }
   const parsed = scannerBrandingSchema.safeParse(req.body);
-  if (!parsed.success || !isValidScannerLogoDataUrl(parsed.data?.logoDataUrl ?? null)) {
-    res.status(400).json({ error: "Scanner branding is invalid. Use accessible color contrast and a PNG, JPEG or WebP logo under 256 KB." });
+  if (!parsed.success || !scannerLogoDataUrls(parsed.data).every(isValidScannerLogoDataUrl)) {
+    res.status(400).json({ error: "Scanner branding is invalid. Use accessible color contrast and up to five PNG, JPEG or WebP logos, each at most 256 KB." });
     return;
   }
   try {

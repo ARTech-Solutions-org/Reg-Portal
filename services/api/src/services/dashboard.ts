@@ -8,7 +8,7 @@ export async function getDashboardSummary(event: EventRow): Promise<DashboardSum
     pool.query<{ total: number; checked_in: number }>(
       `SELECT count(*)::int AS total, count(*) FILTER (WHERE checked_in_at IS NOT NULL)::int AS checked_in FROM ${names.schema}.${names.attendees}`,
     ),
-    pool.query<{ id: string; name: string; ticket_type: string; scanned_at: Date }>(
+    pool.query<{ id: string; name: string | null; ticket_type: string | null; scanned_at: Date }>(
       `SELECT a.id, a.name, a.ticket_type, c.scanned_at
        FROM ${names.schema}.${names.checkins} c
        JOIN ${names.schema}.${names.attendees} a ON a.id=c.attendee_id

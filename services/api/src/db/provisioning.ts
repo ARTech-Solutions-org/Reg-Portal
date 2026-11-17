@@ -20,11 +20,11 @@ export async function createEventTables(client: PoolClient, schema: string, even
   const checkins = quoteIdentifier(names.checkins);
   await client.query(`CREATE TABLE IF NOT EXISTS ${qSchema}.${attendees} (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    qr_token_hash text NOT NULL UNIQUE,
-    qr_token_ciphertext text NOT NULL,
-    name text NOT NULL,
+    qr_token_hash text UNIQUE,
+    qr_token_ciphertext text,
+    name text,
     email text,
-    ticket_type text NOT NULL DEFAULT 'General',
+    ticket_type text DEFAULT 'General',
     checked_in_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now()
   )`);

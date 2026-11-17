@@ -112,13 +112,15 @@ describe("shared API wire contracts", () => {
   it("accepts arbitrary validated attendee fields and binds custom badge elements to their keys", () => {
     const fields = { Company: "Northstar", "Seat zone": "B-12" };
     expect(attendeeFieldListSchema.parse(["Company", "Seat zone"])).toEqual(["Company", "Seat zone"]);
-    expect(attendeeFieldListSchema.safeParse(["bad/key"]).success).toBe(false);
+    expect(attendeeFieldListSchema.parse(["Seat #", "القسم"])).toEqual(["Seat #", "القسم"]);
+    expect(attendeeFieldListSchema.safeParse(["__proto__"]).success).toBe(false);
     expect(attendeeInputSchema.parse({ name: "Alex Guest", customFields: fields }).customFields).toEqual(fields);
-    expect(customFieldKeySchema.safeParse("Seat #").success).toBe(false);
+    expect(customFieldKeySchema.safeParse("Seat\u0000").success).toBe(false);
     expect(attendeeInputSchema.safeParse({ name: "Alex Guest", customFields: Object.fromEntries(Array.from({ length: 31 }, (_, index) => [`Field ${index + 1}`, "value"])) }).success).toBe(false);
     const element = { id: "company-field", kind: "text", field: "custom:Company", x: 0.1, y: 0.2, width: 0.4, height: 0.08 };
     expect(badgeElementSchema.parse(element).field).toBe("custom:Company");
-    expect(badgeElementSchema.safeParse({ ...element, field: "custom:bad/key" }).success).toBe(false);
+    expect(badgeElementSchema.parse({ ...element, field: "custom:Seat #" }).field).toBe("custom:Seat #");
+    expect(badgeElementSchema.safeParse({ ...element, field: "custom:__proto__" }).success).toBe(false);
   });
 
   it("validates stable, event-owned PDF template metadata and rejects external asset paths", () => {

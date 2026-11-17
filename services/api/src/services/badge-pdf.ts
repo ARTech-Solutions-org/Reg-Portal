@@ -3,9 +3,9 @@ import QRCode from "qrcode";
 import type { BadgeElement, BadgeLayout } from "@eventdesk/contracts";
 
 export interface BadgePdfAttendee {
-  name: string;
+  name: string | null;
   email: string | null;
-  ticketType: string;
+  ticketType: string | null;
   customFields: Record<string, string>;
 }
 
@@ -22,12 +22,12 @@ function valueForField(element: BadgeElement, attendee: BadgePdfAttendee, eventN
   if (!field) return element.text ?? "";
   if (field.startsWith("custom:")) {
     const key = field.slice("custom:".length);
-    return attendee.customFields[key] || `[${key}]`;
+    return Object.hasOwn(attendee.customFields, key) ? attendee.customFields[key] ?? "" : "";
   }
   if (field === "custom" || field === "static") return element.text ?? (field === "custom" ? "Your text" : "Static text");
-  if (field === "name") return attendee.name;
+  if (field === "name") return attendee.name ?? "";
   if (field === "email") return attendee.email ?? "";
-  if (field === "ticketType") return attendee.ticketType;
+  if (field === "ticketType") return attendee.ticketType ?? "";
   return eventName;
 }
 

@@ -85,10 +85,43 @@ CREATE TABLE IF NOT EXISTS public.badge_templates (
 
 CREATE TABLE IF NOT EXISTS public.event_attendee_fields (
   event_id uuid NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
-  field_key text NOT NULL CHECK (field_key ~ '^[A-Za-z][A-Za-z0-9 ._-]{0,49}$'),
+  field_key text NOT NULL CHECK (char_length(field_key) BETWEEN 1 AND 50),
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (event_id, field_key)
 );
+
+-- Upgrade existing registries and tenant tables for spreadsheet imports.
+DO $$
+DECLARE
+  tenant record;
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.event_attendee_fields'::regclass
+      AND conname = 'event_attendee_fields_field_key_check'
+      AND pg_get_constraintdef(oid) LIKE '%~%'
+  ) THEN
+    ALTER TABLE public.event_attendee_fields DROP CONSTRAINT event_attendee_fields_field_key_check;
+    ALTER TABLE public.event_attendee_fields ADD CONSTRAINT event_attendee_fields_field_key_check
+      CHECK (char_length(field_key) BETWEEN 1 AND 50);
+  END IF;
+
+  FOR tenant IN
+    SELECT DISTINCT e.schema_name, e.attendee_table_name
+    FROM public.events e
+    JOIN pg_namespace ns ON ns.nspname = e.schema_name
+    JOIN pg_class tbl ON tbl.relnamespace = ns.oid AND tbl.relname = e.attendee_table_name AND tbl.relkind = 'r'
+    JOIN pg_attribute col ON col.attrelid = tbl.oid AND col.attnotnull AND NOT col.attisdropped
+    WHERE e.schema_name = 'project_' || replace(e.project_id::text, '-', '')
+      AND e.attendee_table_name = 'attendees_' || replace(e.id::text, '-', '')
+      AND col.attname IN ('name', 'ticket_type', 'qr_token_hash', 'qr_token_ciphertext')
+  LOOP
+    EXECUTE format(
+      'ALTER TABLE %I.%I ALTER COLUMN name DROP NOT NULL, ALTER COLUMN ticket_type DROP NOT NULL, ALTER COLUMN qr_token_hash DROP NOT NULL, ALTER COLUMN qr_token_ciphertext DROP NOT NULL',
+      tenant.schema_name, tenant.attendee_table_name
+    );
+  END LOOP;
+END $$;
 
 CREATE TABLE IF NOT EXISTS public.scanner_branding (
   event_id uuid PRIMARY KEY REFERENCES public.events(id) ON DELETE CASCADE,

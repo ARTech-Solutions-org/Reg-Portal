@@ -60,9 +60,9 @@ router.post("/:eventId/check-ins", async (req, res, next) => {
       await client.query("BEGIN");
       const found = await client.query<{
         id: string;
-        name: string;
+        name: string | null;
         email: string | null;
-        ticket_type: string;
+        ticket_type: string | null;
         checked_in_at: Date | null;
         scan_count: number | null;
         last_direction: string | null;
@@ -78,6 +78,7 @@ router.post("/:eventId/check-ins", async (req, res, next) => {
         return sendJson(res, checkInResultSchema, { status: "invalid", message: "This QR code is not registered for this event.", attendee: null });
       }
 
+      const attendeeLabel = attendee.name || "Attendee";
       const currentScans = attendee.scan_count ?? (attendee.checked_in_at ? 1 : 0);
       const requestedDirection = parsed.data.direction ?? "auto";
 
@@ -109,7 +110,7 @@ router.post("/:eventId/check-ins", async (req, res, next) => {
           res.setHeader("Cache-Control", "private, no-store");
           return sendJson(res, checkInResultSchema, {
             status: "invalid",
-            message: `${attendee.name} has not checked in yet. Cannot record departure.`,
+            message: `${attendeeLabel} has not checked in yet. Cannot record departure.`,
             attendee: {
               id: attendee.id,
               name: attendee.name,
@@ -130,7 +131,7 @@ router.post("/:eventId/check-ins", async (req, res, next) => {
           res.setHeader("Cache-Control", "private, no-store");
           return sendJson(res, checkInResultSchema, {
             status: "duplicate",
-            message: `${attendee.name} is already checked out (currently outside).`,
+            message: `${attendeeLabel} is already checked out (currently outside).`,
             attendee: {
               id: attendee.id,
               name: attendee.name,
@@ -155,7 +156,7 @@ router.post("/:eventId/check-ins", async (req, res, next) => {
           res.setHeader("Cache-Control", "private, no-store");
           return sendJson(res, checkInResultSchema, {
             status: "duplicate",
-            message: `${attendee.name} is already checked in (currently inside).`,
+            message: `${attendeeLabel} is already checked in (currently inside).`,
             attendee: {
               id: attendee.id,
               name: attendee.name,
@@ -176,8 +177,8 @@ router.post("/:eventId/check-ins", async (req, res, next) => {
           await client.query("COMMIT");
           res.setHeader("Cache-Control", "private, no-store");
           const msg = maxScans === 1
-            ? `${attendee.name} has already checked in.`
-            : `Maximum scan limit reached for ${attendee.name} (${currentScans} of ${maxScans} scans used).`;
+            ? `${attendeeLabel} has already checked in.`
+            : `Maximum scan limit reached for ${attendeeLabel} (${currentScans} of ${maxScans} scans used).`;
           return sendJson(res, checkInResultSchema, {
             status: "duplicate",
             message: msg,
@@ -234,11 +235,11 @@ router.post("/:eventId/check-ins", async (req, res, next) => {
 
       let successMessage = "";
       if (targetDirection === "out") {
-        successMessage = `Departure recorded: ${attendee.name} (Checked Out)`;
+        successMessage = `Departure recorded: ${attendeeLabel} (Checked Out)`;
       } else {
         successMessage = maxScans > 1
-          ? `Check-in recorded: ${attendee.name} (Scan ${newScanCount} of ${maxScans})`
-          : `Check-in recorded: ${attendee.name} (Entrance)`;
+          ? `Check-in recorded: ${attendeeLabel} (Scan ${newScanCount} of ${maxScans})`
+          : `Check-in recorded: ${attendeeLabel} (Entrance)`;
       }
 
       const result = {

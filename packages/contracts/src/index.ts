@@ -19,7 +19,7 @@ export const eventUpdateSchema = z.object({
   startsAt: isoTimestampSchema.nullable().optional(),
   venue: z.string().trim().max(240).nullable().optional(),
 }).strict().refine((value) => Object.keys(value).length > 0, "Provide at least one event field to update.");
-export const customFieldKeySchema = z.string().trim().min(1).max(50).regex(/^[A-Za-z][A-Za-z0-9 _.-]*$/, "Use a field name starting with a letter; letters, numbers, spaces, dots, hyphens and underscores are supported.");
+export const customFieldKeySchema = z.string().trim().min(1).max(50).refine((key) => !/[\u0000-\u001f\u007f]/.test(key) && key !== "__proto__", "Use a field name without control characters or reserved names.");
 export const attendeeCustomFieldsSchema = z.record(customFieldKeySchema, z.string().max(1000))
   .refine((value) => Object.keys(value).length <= 30, "A maximum of 30 custom attendee fields is supported.");
 export const attendeeInputSchema = z.object({
@@ -29,6 +29,17 @@ export const attendeeInputSchema = z.object({
   customFields: attendeeCustomFieldsSchema.default({}),
 }).strict();
 export const bulkAttendeeInputSchema = z.object({ attendees: z.array(attendeeInputSchema).min(1).max(500) }).strict();
+export const importedAttendeeSchema = z.object({
+  name: z.string().max(160).optional(),
+  email: z.string().max(320).optional(),
+  ticketType: z.string().max(80).optional(),
+  customFields: attendeeCustomFieldsSchema,
+}).strict().refine((row) => Boolean(row.name || row.email || row.ticketType || Object.values(row.customFields).some((value) => value.trim())), "Each row must have at least one value.");
+export const attendeeImportSchema = z.object({ attendees: z.array(importedAttendeeSchema).min(1).max(500) }).strict();
+export const attendeeQrIssueSchema = z.object({
+  attendeeIds: z.array(uuidSchema).min(1).max(500).refine((ids) => new Set(ids).size === ids.length, "Attendee IDs must be unique."),
+}).strict();
+export type ImportedAttendee = z.infer<typeof importedAttendeeSchema>;
 export const scanDirectionSchema = z.enum(["in", "out", "auto"]);
 export const checkInInputSchema = z.object({
   token: z.string().trim().min(16).max(256),
@@ -68,10 +79,13 @@ export function scannerAccentForegroundColor(accentColor: string): "#ffffff" | "
   return contrastRatio(accentColor, "#ffffff") >= contrastRatio(accentColor, "#000000") ? "#ffffff" : "#000000";
 }
 
+export const maxScannerLogos = 5;
+const scannerLogoDataUrlSchema = z.string().max(350_000).regex(/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/);
 export const scannerBrandingSchema = z.object({
   brandName: z.string().trim().min(1).max(60),
   brandTagline: z.string().trim().max(80),
-  logoDataUrl: z.string().max(350_000).regex(/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/).nullable(),
+  logoDataUrl: scannerLogoDataUrlSchema.nullable(),
+  additionalLogoDataUrls: z.array(scannerLogoDataUrlSchema).max(maxScannerLogos - 1).optional(),
   accentColor: z.string().regex(/^#[\da-fA-F]{6}$/),
   backgroundColor: z.string().regex(/^#[\da-fA-F]{6}$/),
   panelColor: z.string().regex(/^#[\da-fA-F]{6}$/),
@@ -91,6 +105,9 @@ export const defaultScannerBranding = {
   textColor: "#f4f6fb",
   mutedTextColor: "#9aa7bc",
 } satisfies z.infer<typeof scannerBrandingSchema>;
+export function scannerLogoDataUrls(branding: z.infer<typeof scannerBrandingSchema>): string[] {
+  return [branding.logoDataUrl, ...(branding.additionalLogoDataUrls ?? [])].filter((logo): logo is string => logo !== null);
+}
 export const scannerBrandingGetResponseSchema = z.object({
   branding: scannerBrandingSchema,
   updatedAt: isoTimestampSchema.nullable(),
@@ -136,7 +153,7 @@ export const localSetupSchema = z.object({ username: usernameSchema, password: z
 export const setupStatusSchema = z.object({ setupRequired: z.boolean(), setupBlocked: z.boolean() }).strict();
 
 export const badgeFieldSchema = z.enum(["name", "email", "ticketType", "eventName", "custom", "static"])
-  .or(z.string().regex(/^custom:[A-Za-z][A-Za-z0-9 _.-]{0,49}$/, "Badge field must reference a valid attendee custom-field key."));
+  .or(z.string().refine((value) => value.startsWith("custom:") && customFieldKeySchema.safeParse(value.slice(7)).success, "Badge field must reference a valid attendee custom-field key."));
 export const badgeElementSchema = z.object({
   id: z.string().min(1).max(80),
   kind: z.enum(["qr", "text", "image"]),
@@ -184,10 +201,11 @@ export const eventSummarySchema = z.object({
 export const eventListSchema = z.array(eventSummarySchema);
 export const attendeeSchema = z.object({
   id: uuidSchema,
-  name: z.string().min(1).max(160),
+  name: z.string().max(160).nullable(),
   email: z.string().max(320).nullable(),
-  ticketType: z.string().min(1).max(80),
+  ticketType: z.string().max(80).nullable(),
   customFields: attendeeCustomFieldsSchema,
+  qrIssued: z.boolean().optional(),
   checkedInAt: isoTimestampSchema.nullable(),
   createdAt: isoTimestampSchema,
 }).strict();
@@ -213,8 +231,8 @@ export const checkInResultSchema = z.object({
 }).strict().refine((value) => (value.status === "invalid") === (value.attendee === null), "Invalid check-ins must not include attendee data.");
 export const recentCheckInSchema = z.object({
   id: uuidSchema,
-  name: z.string().min(1).max(160),
-  ticketType: z.string().min(1).max(80),
+  name: z.string().max(160).nullable(),
+  ticketType: z.string().max(80).nullable(),
   checkedInAt: isoTimestampSchema,
 }).strict();
 export const dashboardSummarySchema = z.object({

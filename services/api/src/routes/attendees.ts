@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import QRCode from "qrcode";
-import { attendeeFieldListSchema, attendeeInputSchema, attendeeListSchema, bulkAttendeeInputSchema, bulkAttendeeResultSchema, issuedAttendeeSchema, qrDataResponseSchema } from "@eventdesk/contracts";
+import { attendeeFieldListSchema, attendeeImportSchema, attendeeInputSchema, attendeeListSchema, attendeeQrIssueSchema, bulkAttendeeInputSchema, bulkAttendeeResultSchema, issuedAttendeeSchema, qrDataResponseSchema } from "@eventdesk/contracts";
 import type { AttendeeInput } from "@eventdesk/contracts";
 import { pool } from "../db/pool.js";
 import { findEventForOrganizer, tenantSqlNames } from "../db/tenant.js";
@@ -16,9 +16,10 @@ const qrOptions = { errorCorrectionLevel: "M" as const, margin: 1, width: 360, c
 
 interface AttendeeRow {
   id: string;
-  name: string;
+  name: string | null;
   email: string | null;
-  ticket_type: string;
+  ticket_type: string | null;
+  qr_issued?: boolean;
   custom_fields: Record<string, string> | null;
   checked_in_at: Date | null;
   created_at: Date;
@@ -33,6 +34,7 @@ function publicAttendee(row: AttendeeRow) {
     customFields: row.custom_fields ?? {},
     checkedInAt: row.checked_in_at?.toISOString() ?? null,
     createdAt: row.created_at.toISOString(),
+    ...(row.qr_issued === undefined ? {} : { qrIssued: row.qr_issued }),
   };
 }
 
@@ -44,11 +46,12 @@ router.get("/:eventId/attendees", async (req, res, next) => {
     const { schema, attendees } = tenantSqlNames(event);
     const search = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 120) : "";
     const status = req.query.status === "checked-in" ? "checked-in" : req.query.status === "pending" ? "pending" : "all";
-    const where = ["($1 = '' OR name ILIKE '%' || $1 || '%' OR coalesce(email, '') ILIKE '%' || $1 || '%')"];
+    const where = ["($1 = '' OR name ILIKE '%' || $1 || '%' OR coalesce(email, '') ILIKE '%' || $1 || '%' OR ticket_type ILIKE '%' || $1 || '%' OR EXISTS (SELECT 1 FROM jsonb_each_text(custom_fields) AS field(key, value) WHERE field.value ILIKE '%' || $1 || '%'))"];
     if (status === "checked-in") where.push("checked_in_at IS NOT NULL");
     if (status === "pending") where.push("checked_in_at IS NULL");
     const result = await pool.query<AttendeeRow>(
-      `SELECT id, name, email, ticket_type, custom_fields, checked_in_at, created_at FROM ${schema}.${attendees}
+      `SELECT id, name, email, ticket_type, custom_fields, checked_in_at, created_at,
+              qr_token_ciphertext IS NOT NULL AS qr_issued FROM ${schema}.${attendees}
        WHERE ${where.join(" AND ")} ORDER BY created_at DESC LIMIT 500`, [search],
     );
     return sendJson(res, attendeeListSchema, result.rows.map(publicAttendee));
@@ -97,6 +100,98 @@ router.post("/:eventId/attendees", async (req, res, next) => {
     } finally { client.release(); }
     res.setHeader("Cache-Control", "private, no-store");
     return sendJson(res, issuedAttendeeSchema, { attendee: publicAttendee(row), qrDataUrl }, 201);
+  } catch (error) { next(error); }
+});
+
+
+router.post("/:eventId/attendees/import", async (req, res, next) => {
+  if (!requireUuid(req.params.eventId)) { res.status(400).json({ error: "Invalid event ID." }); return; }
+  const parsed = attendeeImportSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Import between 1 and 500 valid attendee rows." }); return; }
+  try {
+    const event = await findEventForOrganizer(req.params.eventId, organizerId(req));
+    if (!event) { res.status(404).json({ error: "Event not found." }); return; }
+    const { schema, attendees } = tenantSqlNames(event);
+    const input = parsed.data.attendees;
+    const ids = input.map(() => randomUUID());
+    const fieldKeys = [...new Set(input.flatMap((row) => Object.keys(row.customFields)))];
+    const result = await pool.query<AttendeeRow>(
+      `WITH inserted AS (
+         INSERT INTO ${schema}.${attendees}(id, name, email, ticket_type, custom_fields)
+         SELECT source.id, source.name, source.email, source.ticket_type, source.custom_fields::jsonb
+         FROM unnest($1::uuid[], $2::text[], $3::text[], $4::text[], $5::text[])
+           AS source(id, name, email, ticket_type, custom_fields)
+         RETURNING id, name, email, ticket_type, custom_fields, checked_in_at, created_at
+       ), fields AS (
+         INSERT INTO public.event_attendee_fields(event_id,field_key)
+         SELECT $6, field.key FROM unnest($7::text[]) AS field(key) ON CONFLICT(event_id,field_key) DO NOTHING
+       )
+       SELECT *, false AS qr_issued FROM inserted ORDER BY array_position($1::uuid[], id)`,
+      [ids, input.map((row) => row.name ?? null), input.map((row) => row.email ?? null),
+        input.map((row) => row.ticketType ?? null), input.map((row) => JSON.stringify(row.customFields)), event.id, fieldKeys],
+    );
+    res.setHeader("Cache-Control", "private, no-store");
+    return sendJson(res, attendeeListSchema, result.rows.map(publicAttendee), 201);
+  } catch (error) { next(error); }
+});
+
+router.post("/:eventId/attendees/issue-qr", async (req, res, next) => {
+  if (!requireUuid(req.params.eventId)) { res.status(400).json({ error: "Invalid event ID." }); return; }
+  const parsed = attendeeQrIssueSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Select between 1 and 500 attendees." }); return; }
+  const ids = parsed.data.attendeeIds;
+  try {
+    const event = await findEventForOrganizer(req.params.eventId, organizerId(req));
+    if (!event) { res.status(404).json({ error: "Event not found." }); return; }
+    const { schema, attendees } = tenantSqlNames(event);
+    const client = await pool.connect();
+    let rows: Array<AttendeeRow & { qr_token_ciphertext: string | null }>;
+    try {
+      await client.query("BEGIN");
+      const result = await client.query<AttendeeRow & { qr_token_ciphertext: string | null }>(
+        `SELECT id, name, email, ticket_type, custom_fields, checked_in_at, created_at, qr_token_ciphertext
+         FROM ${schema}.${attendees} WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE`, [ids],
+      );
+      rows = result.rows;
+      if (rows.length !== ids.length) {
+        await client.query("ROLLBACK");
+        res.status(404).json({ error: "Some attendees could not be found in this event." });
+        return;
+      }
+
+      const newCredentials = rows.filter((row) => !row.qr_token_ciphertext).map((row) => {
+        const token = newOpaqueToken(24);
+        const ciphertext = encryptToken(token);
+        row.qr_token_ciphertext = ciphertext;
+        return { id: row.id, hash: hashToken(token), ciphertext };
+      });
+      if (newCredentials.length) {
+        await client.query(
+          `UPDATE ${schema}.${attendees} AS attendee
+           SET qr_token_hash=credential.hash, qr_token_ciphertext=credential.ciphertext
+           FROM unnest($1::uuid[], $2::text[], $3::text[]) AS credential(id, hash, ciphertext)
+           WHERE attendee.id=credential.id`,
+          [newCredentials.map((row) => row.id), newCredentials.map((row) => row.hash), newCredentials.map((row) => row.ciphertext)],
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally { client.release(); }
+
+    const rowsById = new Map(rows.map((row) => [row.id, row]));
+    const issued = [];
+    for (let start = 0; start < ids.length; start += 8) {
+      const batch = await Promise.all(ids.slice(start, start + 8).map(async (id) => {
+        const row = rowsById.get(id)!;
+        const qrDataUrl = await QRCode.toDataURL(decryptToken(row.qr_token_ciphertext!), qrOptions);
+        return { attendee: publicAttendee({ ...row, qr_issued: true }), qrDataUrl };
+      }));
+      issued.push(...batch);
+    }
+    res.setHeader("Cache-Control", "private, no-store");
+    return sendJson(res, bulkAttendeeResultSchema, { count: issued.length, attendees: issued });
   } catch (error) { next(error); }
 });
 

@@ -35,12 +35,12 @@ function valueForField(field: BadgeElement["field"], attendee: Attendee | undefi
   if (!field) return text ?? "Text";
   if (field.startsWith("custom:")) {
     const key = field.slice("custom:".length);
-    return attendee?.customFields[key] || `[${key}]`;
+    return attendee ? (Object.hasOwn(attendee.customFields, key) ? attendee.customFields[key] ?? "" : "") : `[${key}]`;
   }
   if (field === "custom" || field === "static") return text ?? (field === "custom" ? "Your text" : "Static text");
-  if (field === "name") return attendee?.name ?? "Alex Morgan";
-  if (field === "email") return attendee?.email ?? "alex@example.com";
-  if (field === "ticketType") return attendee?.ticketType ?? "General admission";
+  if (field === "name") return attendee ? attendee.name ?? "" : "Alex Morgan";
+  if (field === "email") return attendee ? attendee.email ?? "" : "alex@example.com";
+  if (field === "ticketType") return attendee ? attendee.ticketType ?? "" : "General admission";
   return eventName ?? "Event name";
 }
 function bytesFromDataUrl(dataUrl: string): Uint8Array {
@@ -303,6 +303,7 @@ export function DesignerPage() {
       const height = page.getHeight();
       const font = await pdf.embedFont(StandardFonts.Helvetica);
       const attendee = selected;
+      if (attendee?.qrIssued === false) throw new Error("Generate a QR code from the attendees page before exporting this badge.");
       const sampleQr = attendee
         ? (await apiContract(`/events/${eventId}/attendees/${attendee.id}/qr`, qrDataResponseSchema)).qrDataUrl
         : await QRCode.toDataURL("EVENTDESK-DESIGN-PREVIEW", { errorCorrectionLevel: "M", margin: 1, width: 400, color: { dark: "#132035", light: "#FFFFFF" } });
@@ -329,10 +330,10 @@ export function DesignerPage() {
       const url = URL.createObjectURL(new Blob([bytes as unknown as BlobPart], { type: "application/pdf" }));
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `${attendee ? attendee.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() : "eventdesk-badge-preview"}.pdf`;
+      anchor.download = `${attendee ? (attendee.name?.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || attendee.id) : "eventdesk-badge-preview"}.pdf`;
       anchor.click();
       URL.revokeObjectURL(url);
-      toast.success(attendee ? `Badge exported for ${attendee.name}.` : "Badge preview PDF exported.");
+      toast.success(attendee ? "Badge PDF exported." : "Badge preview PDF exported.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not export this badge PDF.");
     } finally { setSaving(false); }
@@ -369,7 +370,7 @@ export function DesignerPage() {
         {selectedElement.kind === "text" && <><label className="block"><span className="label-caps mb-1.5 block">Attendee data field</span><select className="input-control h-9" value={selectedElement.field ?? "static"} onChange={(event) => updateElement(selectedElement.id, { field: event.target.value as BadgeElement["field"] })}><option value="name">Guest name</option><option value="email">Email</option><option value="ticketType">Ticket type</option><option value="eventName">Event name</option>{selectedElement.field?.startsWith("custom:") && !customKeys.includes(selectedElement.field.slice("custom:".length)) && <option value={selectedElement.field}>{labelForField(selectedElement.field)}</option>}{customKeys.map((key) => <option key={key} value={`custom:${key}`}>{key}</option>)}<option value="custom">Custom text</option><option value="static">Static text</option></select></label>{(selectedElement.field === "custom" || selectedElement.field === "static" || !selectedElement.field) && <label className="block"><span className="label-caps mb-1.5 block">Text</span><input className="input-control h-9" value={selectedElement.text ?? ""} onChange={(event) => updateElement(selectedElement.id, { text: event.target.value })} /></label>}<div className="grid grid-cols-2 gap-2"><label><span className="label-caps mb-1.5 block">Font size</span><input className="input-control h-9" type="number" min={6} max={96} value={selectedElement.fontSize ?? 16} onChange={(event) => updateElement(selectedElement.id, { fontSize: Math.max(6, Math.min(96, Number(event.target.value))) })} /></label><label><span className="label-caps mb-1.5 block">Color</span><input className="h-9 w-full cursor-pointer rounded-lg border border-input bg-white p-1" type="color" value={selectedElement.color ?? "#132035"} onChange={(event) => updateElement(selectedElement.id, { color: event.target.value })} /></label></div></>}
         {selectedElement.kind === "qr" && <p className="rounded-lg bg-muted/70 p-3 text-[11px] leading-5 text-muted-foreground">The exported badge uses the selected attendee’s private QR token. Choose an attendee below; otherwise a sample QR is used.</p>}
         {selectedElement.kind === "image" && <p className="rounded-lg bg-muted/70 p-3 text-[11px] leading-5 text-muted-foreground">Image files are included in the saved event layout.</p>}
-        <div className="rounded-lg bg-muted/60 p-3"><p className="label-caps">Badge record</p><select className="input-control mt-2 h-9" value={attendeeId} onChange={(event) => setAttendeeId(event.target.value)}><option value="">Sample guest</option>{attendees.data?.map((attendee) => <option key={attendee.id} value={attendee.id}>{attendee.name} · {attendee.ticketType}</option>)}</select></div>
+        <div className="rounded-lg bg-muted/60 p-3"><p className="label-caps">Badge record</p><select className="input-control mt-2 h-9" value={attendeeId} onChange={(event) => setAttendeeId(event.target.value)}><option value="">Sample guest</option>{attendees.data?.map((attendee) => <option key={attendee.id} value={attendee.id}>{[attendee.name, attendee.ticketType].filter(Boolean).join(" · ") || attendee.email || Object.values(attendee.customFields).find(Boolean) || attendee.id}{attendee.qrIssued === false ? " · QR pending" : ""}</option>)}</select></div>
         <Button variant="outline" className="w-full" size="sm" onClick={() => saveLayout.mutate()} disabled={saveLayout.isPending}><Save className="h-3.5 w-3.5" />Save layout</Button>
       </div> : <div className="mt-4 rounded-xl border border-dashed border-border p-5 text-center"><MousePointer2 className="mx-auto h-5 w-5 text-muted-foreground" /><p className="mt-2 text-xs text-muted-foreground">Select an element on the badge to edit its field and style.</p></div>}
         <div className="mt-5 border-t border-border pt-4"><p className="label-caps">Template</p><p className="mt-2 text-xs font-medium">{fileName || "Blank badge page"}</p><div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground"><FileText className="h-3 w-3" />{fileName ? `${pageCount} PDF page${pageCount === 1 ? "" : "s"}` : "6 × 8 in canvas"}</div>{uploadingTemplate && <p className="mt-2 text-[10px] text-primary">Saving PDF to durable event storage…</p>}{templateError && <p role="alert" className="mt-2 text-[10px] leading-4 text-destructive">{templateError}</p>}{templateQuery.isError && !templateError && <p role="alert" className="mt-2 text-[10px] leading-4 text-destructive">Could not load the saved template metadata.</p>}</div>
