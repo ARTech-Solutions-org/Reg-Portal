@@ -55,6 +55,22 @@ function ScannerDesk() {
   const [cameraError, setCameraError] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<CheckInResult | null>(null);
+  const [showScanFeedback, setShowScanFeedback] = useState(false);
+  const feedbackUntil = useRef(0);
+  const dismissScanFeedback = useCallback(() => {
+    feedbackUntil.current = 0;
+    setShowScanFeedback(false);
+  }, []);
+  const presentResult = useCallback((value: CheckInResult) => {
+    feedbackUntil.current = performance.now() + 1400;
+    setResult(value);
+    setShowScanFeedback(true);
+  }, []);
+  useEffect(() => {
+    if (!showScanFeedback) return;
+    const timer = window.setTimeout(dismissScanFeedback, Math.max(0, feedbackUntil.current - performance.now()));
+    return () => window.clearTimeout(timer);
+  }, [showScanFeedback, result, dismissScanFeedback]);
   const [manualCode, setManualCode] = useState("");
 
   const directionStorageKey = `eventdesk:scanner_direction:${eventId}:${token}`;
@@ -127,7 +143,7 @@ function ScannerDesk() {
 
   const processCode = useCallback(async (code: string, fromCamera = false) => {
     const clean = code.trim();
-    if (!clean || !token || !session || busyRef.current) return;
+    if (!clean || !token || !session || busyRef.current || performance.now() < feedbackUntil.current) return;
     if (fromCamera && !scanGate.current.accept(clean, performance.now())) return;
     busyRef.current = true;
     setBusy(true);
@@ -141,7 +157,7 @@ function ScannerDesk() {
           direction,
         }),
       });
-      setResult(response);
+      presentResult(response);
       if (response.attendee) setRecent((old) => [{
         id: response.attendee!.id,
         name: response.attendee!.name || "Attendee",
@@ -153,13 +169,13 @@ function ScannerDesk() {
       if (response.status === "valid" && "vibrate" in navigator) navigator.vibrate?.(60);
     } catch (error) {
       scanGate.current.retryAfter(performance.now());
-      setResult({ status: "invalid", message: error instanceof ScannerApiError ? error.message : "Check-in could not be recorded. Please retry.", attendee: null });
+      presentResult({ status: "invalid", message: error instanceof ScannerApiError ? error.message : "Check-in could not be recorded. Please retry.", attendee: null });
     } finally {
       setBusy(false);
       busyRef.current = false;
       setManualCode("");
     }
-  }, [direction, eventId, token, session]);
+  }, [direction, eventId, token, session, presentResult]);
   const processRef = useRef(processCode);
   processRef.current = processCode;
 
@@ -169,7 +185,7 @@ function ScannerDesk() {
     setStartingCamera(true);
     scanGate.current.reset();
     const scanner = startCameraScanner(videoRef.current, (code) => {
-      if (busyRef.current) {
+      if (busyRef.current || performance.now() < feedbackUntil.current) {
         scanGate.current.observe(code.trim(), performance.now());
         return;
       }
@@ -249,6 +265,23 @@ function ScannerDesk() {
 
   return (
     <main className="safe-area scanner-theme min-h-screen px-4 pb-8 pt-5 sm:px-6" style={themeStyle}>
+      {showScanFeedback && result && (
+        <div className="scan-feedback" data-status={result.status} role="status" aria-live="assertive" aria-atomic="true">
+          <div className="mx-auto flex w-full max-w-lg flex-col items-center px-7 text-center">
+            {result.status === "valid"
+              ? <CheckCircle2 className="mb-6 h-28 w-28 sm:h-36 sm:w-36" strokeWidth={2} aria-hidden="true" />
+              : result.status === "duplicate"
+              ? <TriangleAlert className="mb-6 h-28 w-28 sm:h-36 sm:w-36" strokeWidth={2} aria-hidden="true" />
+              : <XCircle className="mb-6 h-28 w-28 sm:h-36 sm:w-36" strokeWidth={2} aria-hidden="true" />}
+            <h2 className="text-3xl font-bold leading-tight sm:text-4xl">{resultTitle}</h2>
+            {result.attendee?.name && <p className="mt-4 break-words text-2xl font-semibold">{result.attendee.name}</p>}
+            <p className="mt-4 text-base leading-relaxed">{resultMessage}</p>
+            <button type="button" onClick={dismissScanFeedback} className="mt-8 rounded-xl border-2 border-current px-6 py-3 text-base font-semibold focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4">
+              Scan next
+            </button>
+          </div>
+        </div>
+      )}
       <div className="mx-auto max-w-[760px]">
         <header className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
           <div className="flex min-w-0 flex-wrap items-center gap-3">

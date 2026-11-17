@@ -25,3 +25,16 @@ button { cursor: pointer; }
 .scanner-theme .scanner-result[data-status="duplicate"] { background: #fffbeb; color: #78350f; border-color: #fbbf24; }
 .scanner-theme .scanner-result[data-status="invalid"] { background: #fff1f2; color: #881337; border-color: #fb7185; }
 .scanner-result [class*="text-"] { color: inherit; }
+
+.scan-feedback {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: max(24px, env(safe-area-inset-top)) 0 max(24px, env(safe-area-inset-bottom));
+}
+.scan-feedback[data-status="valid"] { background: #047857; color: #ffffff; }
+.scan-feedback[data-status="duplicate"] { background: #fbbf24; color: #451a03; }
+.scan-feedback[data-status="invalid"] { background: #be123c; color: #ffffff; }
