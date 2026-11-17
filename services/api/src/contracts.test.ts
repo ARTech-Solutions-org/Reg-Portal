@@ -75,8 +75,9 @@ describe("shared API wire contracts", () => {
     expect(scannerLinkListItemSchema.safeParse({ ...listed, url: issued.url }).success).toBe(false);
   });
 
-  it("validates event-specific scanner branding and preserves the default Gatepass identity", () => {
+  it("validates event-specific scanner branding and preserves the default ARTECH identity", () => {
     expect(scannerBrandingSchema.parse(defaultScannerBranding)).toEqual(defaultScannerBranding);
+    expect(defaultScannerBranding.brandName).toBe("ARTECH");
     const custom = scannerBrandingSchema.parse({
       ...defaultScannerBranding,
       brandName: "Northstar Summit",

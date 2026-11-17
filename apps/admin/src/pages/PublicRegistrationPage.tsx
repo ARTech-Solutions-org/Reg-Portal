@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "@eventdesk/contracts";
 import { useState, useEffect, type FormEvent } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -489,7 +490,7 @@ export default function PublicRegistrationPage() {
 
         <div className="mt-8 text-center text-xs text-muted-foreground">
           <span>Powered by </span>
-          <span className="font-semibold text-foreground">Gatepass</span>
+          <span className="font-semibold text-foreground">{PRODUCT_NAME}</span>
         </div>
       </div>
     </div>

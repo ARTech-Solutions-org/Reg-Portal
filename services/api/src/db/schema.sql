@@ -130,6 +130,13 @@ CREATE TABLE IF NOT EXISTS public.scanner_branding (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS public.event_admin_branding (
+  event_id uuid PRIMARY KEY REFERENCES public.events(id) ON DELETE CASCADE,
+  branding jsonb NOT NULL,
+  updated_by uuid NOT NULL REFERENCES public.organizers(id),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS public.project_branding (
   project_id uuid PRIMARY KEY REFERENCES public.projects(id) ON DELETE CASCADE,
   branding jsonb NOT NULL,

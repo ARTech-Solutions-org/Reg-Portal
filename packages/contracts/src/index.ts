@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export { badgeArchiveFilenames } from "./badge-filenames.js";
+
 const isoTimestampSchema = z.string().datetime();
 const nonEmptyNameSchema = z.string().trim().min(1).max(160);
 
@@ -39,6 +41,12 @@ export const attendeeImportSchema = z.object({ attendees: z.array(importedAttend
 export const attendeeQrIssueSchema = z.object({
   attendeeIds: z.array(uuidSchema).min(1).max(500).refine((ids) => new Set(ids).size === ids.length, "Attendee IDs must be unique."),
 }).strict();
+export const badgeFilenameFieldSchema = z.enum(["id", "name", "email", "ticketType"]).or(
+  z.string().refine((field) => field.startsWith("custom:") && customFieldKeySchema.safeParse(field.slice(7)).success, "Choose a valid attendee field."),
+);
+export const badgeArchiveInputSchema = attendeeQrIssueSchema.extend({
+  filenameFields: z.array(badgeFilenameFieldSchema).min(1).max(2),
+});
 export type ImportedAttendee = z.infer<typeof importedAttendeeSchema>;
 export const scanDirectionSchema = z.enum(["in", "out", "auto"]);
 export const checkInInputSchema = z.object({
@@ -95,9 +103,10 @@ export const scannerBrandingSchema = z.object({
   const issues = scannerBrandingContrastIssues(value);
   for (const issue of issues) ctx.addIssue({ code: z.ZodIssueCode.custom, message: issue });
 });
+export const PRODUCT_NAME = "ARTECH";
 export const defaultScannerBranding = {
-  brandName: "ALMIRA AUREA",
-  brandTagline: "Gatepass / scanner",
+  brandName: PRODUCT_NAME,
+  brandTagline: "Event check-in",
   logoDataUrl: null,
   accentColor: "#5697ff",
   backgroundColor: "#111722",
@@ -210,6 +219,7 @@ export const attendeeSchema = z.object({
   createdAt: isoTimestampSchema,
 }).strict();
 export const attendeeListSchema = z.array(attendeeSchema);
+export const clearAttendeesResultSchema = z.object({ deletedCount: z.number().int().nonnegative() }).strict();
 export const attendeeFieldListSchema = z.array(customFieldKeySchema);
 export const qrDataResponseSchema = z.object({ qrDataUrl: z.string().startsWith("data:image/png;base64,") }).strict();
 export const issuedAttendeeSchema = z.object({ attendee: attendeeSchema, qrDataUrl: z.string().startsWith("data:image/png;base64,") }).strict();
@@ -243,7 +253,7 @@ export const dashboardSummarySchema = z.object({
   recentCheckIns: z.array(recentCheckInSchema).max(8),
   hourly: z.array(z.object({ hour: z.string().regex(/^(?:[01]\d|2[0-3]):00$/), count: z.number().int().nonnegative() }).strict()).max(12),
 }).strict().refine((value) => value.checkedIn <= value.total && value.remaining === value.total - value.checkedIn, "Dashboard counts are inconsistent.");
-export const eventDashboardSchema = z.object({ event: eventSummarySchema, summary: dashboardSummarySchema, branding: eventAdminBrandingSchema.optional() }).strict();
+export const eventDashboardSchema = z.object({ event: eventSummarySchema, summary: dashboardSummarySchema, branding: eventAdminBrandingSchema.optional(), canClearAttendees: z.boolean().optional() }).strict();
 export const scannerLinkIssueResponseSchema = z.object({
   id: uuidSchema,
   eventId: uuidSchema,

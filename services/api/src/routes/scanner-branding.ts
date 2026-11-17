@@ -17,7 +17,12 @@ router.get("/:eventId/scanner-branding", async (req, res, next) => {
       "SELECT branding, updated_at FROM public.scanner_branding WHERE event_id=$1", [req.params.eventId],
     );
     const saved = result.rows[0];
-    const branding = saved ? scannerBrandingSchema.parse(saved.branding) : defaultScannerBranding;
+    const theme = saved ? scannerBrandingSchema.parse(saved.branding) : defaultScannerBranding;
+    const branding = {
+      ...theme,
+      brandName: theme.brandName === "ALMIRA AUREA" ? defaultScannerBranding.brandName : theme.brandName,
+      brandTagline: theme.brandTagline === "Gatepass / scanner" ? defaultScannerBranding.brandTagline : theme.brandTagline,
+    };
     res.setHeader("Cache-Control", "private, no-store");
     return sendJson(res, scannerBrandingGetResponseSchema, {
       branding,

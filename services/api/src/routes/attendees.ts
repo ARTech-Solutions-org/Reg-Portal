@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import QRCode from "qrcode";
-import { attendeeFieldListSchema, attendeeImportSchema, attendeeInputSchema, attendeeListSchema, attendeeQrIssueSchema, bulkAttendeeInputSchema, bulkAttendeeResultSchema, issuedAttendeeSchema, qrDataResponseSchema } from "@eventdesk/contracts";
+import { attendeeFieldListSchema, attendeeImportSchema, attendeeInputSchema, attendeeListSchema, attendeeQrIssueSchema, bulkAttendeeInputSchema, bulkAttendeeResultSchema, clearAttendeesResultSchema, issuedAttendeeSchema, qrDataResponseSchema } from "@eventdesk/contracts";
 import type { AttendeeInput } from "@eventdesk/contracts";
 import { pool } from "../db/pool.js";
+import { eventTableNames, projectSchemaName } from "../db/tenant-identifiers.js";
 import { findEventForOrganizer, tenantSqlNames } from "../db/tenant.js";
 import { newOpaqueToken, hashToken, encryptToken, decryptToken } from "../lib/tokens.js";
 import { sendJson } from "../lib/responses.js";
@@ -55,6 +56,27 @@ router.get("/:eventId/attendees", async (req, res, next) => {
        WHERE ${where.join(" AND ")} ORDER BY created_at DESC LIMIT 500`, [search],
     );
     return sendJson(res, attendeeListSchema, result.rows.map(publicAttendee));
+  } catch (error) { next(error); }
+});
+
+
+router.delete("/:eventId/attendees", async (req, res, next) => {
+  if (!requireUuid(req.params.eventId)) { res.status(400).json({ error: "Invalid event ID." }); return; }
+  try {
+    const event = await findEventForOrganizer(req.params.eventId, organizerId(req));
+    if (!event) { res.status(404).json({ error: "Event not found." }); return; }
+    if (event.membership_role !== "owner") {
+      res.status(403).json({ error: "Only the event owner can clear the attendee list." });
+      return;
+    }
+    if (event.schema_name !== projectSchemaName(event.project_id) || event.attendee_table_name !== eventTableNames(event.id).attendees) {
+      throw new Error("Unsafe attendee table mapping.");
+    }
+
+    const { schema, attendees } = tenantSqlNames(event);
+    // The check-in table's foreign key removes check-ins alongside their attendees.
+    const result = await pool.query(`DELETE FROM ${schema}.${attendees}`);
+    return sendJson(res, clearAttendeesResultSchema, { deletedCount: result.rowCount ?? 0 });
   } catch (error) { next(error); }
 });
 

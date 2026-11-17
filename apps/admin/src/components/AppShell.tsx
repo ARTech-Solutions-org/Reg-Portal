@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Activity, ArrowUpRight, ChevronDown, CircleHelp, LayoutDashboard, LogOut, Palette, Settings2, TicketCheck, Users2 } from "lucide-react";
+import { PRODUCT_NAME } from "@eventdesk/contracts";
 import { Brand } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/AuthProvider";
@@ -44,7 +45,7 @@ export function AppShell() {
           {branding?.logoDataUrl ? (
             <img src={branding.logoDataUrl} alt="Logo" className="max-h-6 object-contain" />
           ) : (
-            <><Brand compact /><span className="font-display text-xs font-bold tracking-[.13em]">ALMIRA AUREA</span></>
+            <><Brand compact /><span className="font-display text-xs font-bold tracking-[.13em]">{PRODUCT_NAME}</span></>
           )}
         </div>
         <div className="hidden md:block"><p className="label-caps">Event operations · live workspace</p><p className="mt-1 text-xs text-muted-foreground">A clear view of every arrival.</p></div>

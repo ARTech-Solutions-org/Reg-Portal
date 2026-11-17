@@ -4,9 +4,11 @@ const { queryMock, connectMock } = vi.hoisted(() => ({ queryMock: vi.fn(), conne
 vi.mock("./db/pool.js", () => ({ pool: { query: queryMock, connect: connectMock } }));
 
 import app from "./app.js";
+import { unzipSync } from "fflate";
+import { PDFDocument } from "pdf-lib";
 import { defaultScannerBranding } from "@eventdesk/contracts";
 import { SESSION_COOKIE, signSession } from "./lib/session.js";
-import { decryptScannerLinkToken, encryptScannerLinkToken, hashToken } from "./lib/tokens.js";
+import { decryptScannerLinkToken, encryptScannerLinkToken, encryptToken, hashToken } from "./lib/tokens.js";
 
 const eventId = "06ae1e46-78c5-4db4-b090-e36112ca7311";
 const organizerId = "9fbbd89a-0901-43cf-8b7d-a071b8320d48";
@@ -122,6 +124,113 @@ describe("attendee import and QR issuance", () => {
   });
 });
 
+
+
+describe("clear attendee list", () => {
+  it("deletes all attendees from the owner's event and rejects other organizers", async () => {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("The test server did not bind a TCP port.");
+    const projectId = "513570a8-9554-48a9-be3c-293394b1f37a";
+    const schemaName = `project_${projectId.replaceAll("-", "")}`;
+    const tableName = `attendees_${eventId.replaceAll("-", "")}`;
+    const event = {
+      id: eventId,
+      project_id: projectId,
+      schema_name: schemaName,
+      attendee_table_name: tableName,
+      checkin_table_name: `checkins_${eventId.replaceAll("-", "")}`,
+      membership_role: "viewer",
+    };
+    let member = true;
+    const deleteQuery = vi.fn().mockResolvedValue({ rowCount: 4 });
+    queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes("public.organizers")) return { rows: [{ id: organizerId, username: "owner" }] };
+      if (sql.includes("public.project_memberships")) return { rows: member ? [event] : [] };
+      if (sql.startsWith("DELETE")) return deleteQuery(sql);
+      throw new Error("Unexpected query");
+    });
+
+    const clear = () => fetch(`http://127.0.0.1:${address.port}/api/events/${eventId}/attendees?q=filtered`, {
+      method: "DELETE",
+      headers: { Cookie: organizerCookie() },
+    });
+    expect((await clear()).status).toBe(403);
+    member = false;
+    expect((await clear()).status).toBe(404);
+    expect(deleteQuery).not.toHaveBeenCalled();
+
+    member = true;
+    event.membership_role = "owner";
+    const cleared = await clear();
+    expect(cleared.status).toBe(200);
+    expect(await cleared.json()).toEqual({ deletedCount: 4 });
+    expect(deleteQuery).toHaveBeenCalledOnce();
+    expect(deleteQuery).toHaveBeenCalledWith(`DELETE FROM "${schemaName}"."${tableName}"`);
+  });
+});
+
+describe("badge ZIP download", () => {
+  it("downloads one PDF per attendee with selected fields and unique filenames", async () => {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("The test server did not bind a TCP port.");
+    const suffix = eventId.replaceAll("-", "");
+    const ids = ["2517ea53-bf71-408f-9a28-70f437de3b41", "2517ea53-bf71-408f-9a28-70f437de3b42", "2517ea53-bf71-408f-9a28-70f437de3b43"];
+    const event = { id: eventId, name: "Test event", schema_name: `project_${suffix}`, attendee_table_name: `attendees_${suffix}`, checkin_table_name: `checkins_${suffix}` };
+    const rows = ids.map((id, index) => ({
+      id,
+      name: "Avery Stone",
+      email: null,
+      ticket_type: null,
+      custom_fields: { ID: index < 2 ? "0007" : "قسم/8" },
+      qr_token_ciphertext: encryptToken(`example-test-qr-credential-${index}`),
+    }));
+    const layout = {
+      pageIndex: 0,
+      pageWidth: 612,
+      pageHeight: 792,
+      elements: [
+        { id: "name", kind: "text", field: "name", x: 0.1, y: 0.1, width: 0.7, height: 0.1 },
+        { id: "qr", kind: "qr", x: 0.1, y: 0.3, width: 0.3, height: 0.3 },
+      ],
+    };
+    queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes("public.organizers")) return { rows: [{ id: organizerId, username: "owner" }] };
+      if (sql.includes("public.project_memberships")) return { rows: [event] };
+      if (sql.includes("public.badge_layouts")) return { rows: [{ layout }] };
+      if (sql.includes("public.badge_templates")) return { rows: [] };
+      if (sql.includes("qr_token_ciphertext")) return { rows };
+      throw new Error("Unexpected query");
+    });
+    const post = (filenameFields: string[]) => fetch(`http://127.0.0.1:${address.port}/api/events/${eventId}/badges/bulk.zip`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: organizerCookie() },
+      body: JSON.stringify({ attendeeIds: ids, filenameFields }),
+    });
+
+    const response = await post(["custom:ID", "name"]);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/zip");
+    expect(response.headers.get("content-disposition")).toContain("eventdesk-badges.zip");
+    const entries = unzipSync(new Uint8Array(await response.arrayBuffer()));
+    expect(Object.keys(entries)).toEqual(["0007 - Avery Stone.pdf", "0007 - Avery Stone (2).pdf", "قسم-8 - Avery Stone.pdf"]);
+    for (const pdf of Object.values(entries)) {
+      expect((await PDFDocument.load(pdf)).getPageCount()).toBe(1);
+    }
+    expect(entries["0007 - Avery Stone.pdf"]).not.toEqual(entries["0007 - Avery Stone (2).pdf"]);
+
+    const namesOnly = await post(["name"]);
+    expect(Object.keys(unzipSync(new Uint8Array(await namesOnly.arrayBuffer())))).toEqual(["Avery Stone.pdf", "Avery Stone (2).pdf", "Avery Stone (3).pdf"]);
+
+    const idsOnly = await post(["id"]);
+    expect(Object.keys(unzipSync(new Uint8Array(await idsOnly.arrayBuffer())))).toEqual(ids.map((id) => `${id}.pdf`));
+
+    rows[2]!.qr_token_ciphertext = "";
+    const pending = await post(["id"]);
+    expect(pending.status).toBe(409);
+    expect(await pending.json()).toEqual({ error: "Generate QR codes for all selected attendees before downloading badges." });
+  });
+});
+
 describe("scanner branding route", () => {
   it("serves only the event's public branding without organizer login", async () => {
     const address = server.address();
@@ -149,6 +258,20 @@ describe("scanner branding route", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toContain("no-store");
     expect(await response.json()).toEqual({ branding: savedBranding, updatedAt: updatedAt.toISOString() });
+  });
+
+  it("shows ARTECH for a saved legacy default theme and keeps the event colors", async () => {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("The test API server did not bind a TCP port.");
+    const branding = { ...defaultScannerBranding, brandName: "ALMIRA AUREA", brandTagline: "Gatepass / scanner", accentColor: "#7ab0ff" };
+    const updatedAt = new Date("2026-09-30T09:00:00.000Z");
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ id: eventId }] })
+      .mockResolvedValueOnce({ rows: [{ branding, updated_at: updatedAt }] });
+
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/events/${eventId}/scanner-branding`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ branding: { ...defaultScannerBranding, accentColor: "#7ab0ff" }, updatedAt: updatedAt.toISOString() });
   });
 
   it("requires organizer login before accepting an event branding write", async () => {

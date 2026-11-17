@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { KeyRound, LockKeyhole, UserRound } from "lucide-react";
 import { ApiError, apiContract } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
+import { PRODUCT_NAME } from "@eventdesk/contracts";
 import { Brand } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 import { setupStatusSchema } from "@eventdesk/contracts";
@@ -41,8 +42,8 @@ export function LoginPage() {
     <div className="relative grid w-full max-w-[1000px] overflow-hidden rounded-[28px] border border-border bg-white shadow-lift md:grid-cols-[1.02fr_.98fr]">
       <section className="hidden flex-col justify-between bg-sidebar p-10 text-white md:flex">
         <Brand light />
-        <div><div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 font-mono text-[10px] uppercase tracking-[.16em] text-white/70"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Gatepass / operations</div><h1 className="font-display text-[46px] font-semibold leading-[1.02] tracking-[-.045em]">Move the line.<br /><span className="text-blue-300">Keep the signal.</span></h1><p className="mt-6 max-w-sm text-sm leading-6 text-white/60">A composed view of arrivals, attendance and the moments that make an event feel effortless.</p></div>
-        <div className="flex items-center justify-between border-t border-white/10 pt-5 font-mono text-[9px] uppercase tracking-[.16em] text-white/40"><span>ALMIRA AUREA</span><span>Event ops / 01</span></div>
+        <div><div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 font-mono text-[10px] uppercase tracking-[.16em] text-white/70"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Event operations</div><h1 className="font-display text-[46px] font-semibold leading-[1.02] tracking-[-.045em]">Move the line.<br /><span className="text-blue-300">Keep the signal.</span></h1><p className="mt-6 max-w-sm text-sm leading-6 text-white/60">A composed view of arrivals, attendance and the moments that make an event feel effortless.</p></div>
+        <div className="flex items-center justify-between border-t border-white/10 pt-5 font-mono text-[9px] uppercase tracking-[.16em] text-white/40"><span>{PRODUCT_NAME}</span><span>Event ops / 01</span></div>
       </section>
       <section className="flex min-h-[580px] flex-col justify-center p-7 sm:p-12">
         <div className="mb-9 md:hidden"><Brand /></div>

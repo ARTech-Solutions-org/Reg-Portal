@@ -15,6 +15,7 @@ export interface BadgePdfOptions {
   eventName: string;
   qrTokens: string[];
   templateBytes?: Uint8Array;
+  templatePdf?: PDFDocument;
 }
 
 function valueForField(element: BadgeElement, attendee: BadgePdfAttendee, eventName: string): string {
@@ -37,13 +38,12 @@ function imageFromDataUrl(dataUrl: string): { bytes: Uint8Array; format: "png" |
   return { bytes: Buffer.from(match[2]!, "base64"), format: match[1] === "png" ? "png" : "jpg" };
 }
 
-export async function buildBadgePdf({ layout, attendees, eventName, qrTokens, templateBytes }: BadgePdfOptions): Promise<Uint8Array> {
+export async function buildBadgePdf({ layout, attendees, eventName, qrTokens, templateBytes, templatePdf: loadedTemplate }: BadgePdfOptions): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
-  let templatePdf: PDFDocument | undefined;
+  const templatePdf = loadedTemplate ?? (templateBytes ? await PDFDocument.load(templateBytes) : undefined);
   let templatePageIndex = 0;
   
-  if (templateBytes) {
-    templatePdf = await PDFDocument.load(templateBytes);
+  if (templatePdf) {
     const pages = templatePdf.getPages();
     if (!pages.length) throw new Error("The saved badge template does not contain a PDF page.");
     templatePageIndex = Math.min(layout.pageIndex, pages.length - 1);

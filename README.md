@@ -73,6 +73,7 @@ All application routes share the same origin. Authenticated project/event/attend
 | `GET/POST /api/projects/:projectId/events` | List events or create an event with attendee/check-in tables. |
 | `GET/PATCH/DELETE /api/events/:eventId` | Read/edit event context; project owners may delete its tenant tables. |
 | `GET/POST /api/events/:eventId/attendees` | Search/filter guest records or issue one attendee and their QR image; custom values are validated and stored in that event's isolated JSONB attendee field. |
+| `DELETE /api/events/:eventId/attendees` | Clear all attendees and their check-ins for the selected event with owner access. |
 | `POST /api/events/:eventId/attendees/bulk` | Atomically import up to 500 attendees; CSV headers beyond `name`, `email`, and `ticketType` become attendee custom fields. |
 | `GET /api/events/:eventId/attendees/:attendeeId/qr` | Recreate an authorized attendee QR from encrypted-at-rest token storage. |
 | `GET /api/events/:eventId/attendees/:attendeeId/badge.pdf` | Download an attendee-specific designed PDF using the saved template, normalized layout, attendee fields and encrypted QR credential. |
@@ -80,7 +81,7 @@ All application routes share the same origin. Authenticated project/event/attend
 | `POST /api/events/:eventId/scanner-links`, `GET /api/events/:eventId/scanner-links`, `DELETE /api/events/:eventId/scanner-links/:linkId` | Issue, list, and revoke expiring staff links. New links keep a one-way validation hash plus purpose-separated AES-GCM ciphertext for copy; raw tokens are never stored. |
 | `POST /api/events/:eventId/scanner-links/:linkId/copy` | Organizer-authenticated, event-scoped retrieval of the same active, unexpired staff URL. The endpoint is no-store; older hash-only links cannot be recovered and are not rotated automatically. |
 | `GET /api/events/:eventId/scanner-session` | Validate a staff bearer token and return the event/label needed by the scanner UI. |
-| `GET /api/events/:eventId/scanner-branding` | Return non-sensitive event scanner branding for public staff display; unsaved events use the default ALMIRA AUREA identity. |
+| `GET /api/events/:eventId/scanner-branding` | Return non-sensitive event scanner branding for public staff display; unsaved events use the default ARTECH identity. |
 | `PUT /api/events/:eventId/scanner-branding` | Organizer-authenticated save for the event name/descriptor, a PNG/JPEG/WebP logo up to 256 KB, and scanner colors. |
 | `POST /api/events/:eventId/check-ins` | Register a valid, duplicate, or invalid scan; accepts the organizer session or scanner token. |
 | `GET /api/events/:eventId/dashboard`, `GET /api/events/:eventId/stream` | Read analytics/recent activity and subscribe to SSE updates. |

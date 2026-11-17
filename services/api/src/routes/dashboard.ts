@@ -50,7 +50,7 @@ router.get("/:eventId/dashboard", async (req, res, next) => {
     if (!event) { res.status(404).json({ error: "Event not found." }); return; }
     const result = await pool.query("SELECT branding FROM public.event_admin_branding WHERE event_id=$1", [event.id]);
     const branding = result.rows[0] ? eventAdminBrandingSchema.parse(result.rows[0].branding) : defaultEventAdminBranding;
-    return sendJson(res, eventDashboardSchema, { event: publicEvent(event), summary: await getDashboardSummary(event), branding });
+    return sendJson(res, eventDashboardSchema, { event: publicEvent(event), summary: await getDashboardSummary(event), branding, canClearAttendees: event.membership_role === "owner" });
   } catch (error) { next(error); }
 });
 
