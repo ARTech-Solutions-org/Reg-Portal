@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDownToLine, ArrowLeft, Check, FileArchive, FilePlus2, FileText, Link2, Plus, Search, Trash2, UserPlus, UsersRound, X } from "lucide-react";
+import { ArrowDownToLine, ArrowLeft, Check, FileArchive, FilePlus2, FileText, Link2, Plus, Search, RotateCcw, Trash2, UserPlus, UsersRound, X } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { apiErrorResponseSchema, attendeeImportSchema, attendeeInputSchema, attendeeListSchema, attendeeQrIssueSchema, badgeArchiveFilenames, badgeArchiveInputSchema, bulkAttendeeResultSchema, clearAttendeesResultSchema, contractJson, customFieldKeySchema, issuedAttendeeSchema, type Attendee, type AttendeeInput, type BulkAttendeeResult, type IssuedAttendee } from "@eventdesk/contracts";
+import { apiErrorResponseSchema, attendeeImportSchema, attendeeInputSchema, attendeeListSchema, attendeeQrIssueSchema, badgeArchiveFilenames, badgeArchiveInputSchema, bulkAttendeeResultSchema, clearAttendeesResultSchema, selectedAttendeesInputSchema, selectedAttendeesResultSchema, contractJson, customFieldKeySchema, issuedAttendeeSchema, type Attendee, type AttendeeInput, type BulkAttendeeResult, type IssuedAttendee } from "@eventdesk/contracts";
 import { apiContract, ApiError } from "@/lib/api";
 import { useEventDashboard } from "@/hooks/useEventDashboard";
 import { EventTabs, PageHeader } from "@/components/PageHeader";
@@ -62,6 +62,7 @@ export function AttendeesPage() {
 function EventAttendees({ eventId }: { eventId: string }) {
   const client = useQueryClient();
   const eventQuery = useEventDashboard(eventId);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
   const [showForm, setShowForm] = useState(false);
@@ -114,6 +115,7 @@ function EventAttendees({ eventId }: { eventId: string }) {
   const clearAttendees = useMutation({
     mutationFn: () => apiContract(`/events/${eventId}/attendees`, clearAttendeesResultSchema, { method: "DELETE" }),
     onSuccess: async ({ deletedCount }) => {
+      setSelectedIds([]);
       setCreated(null);
       setBulkCreated(null);
       setSavedImport([]);
@@ -127,7 +129,31 @@ function EventAttendees({ eventId }: { eventId: string }) {
     },
     onError: (error) => toast.error(error instanceof ApiError ? error.message : "Could not clear the attendee list."),
   });
-  const clearing = clearAttendees.isPending;
+  const updateSelected = useMutation({
+    mutationFn: ({ action, ids }: { action: "delete" | "reset"; ids: string[] }) => apiContract(
+      `/events/${eventId}/attendees/selected`,
+      selectedAttendeesResultSchema,
+      { method: "POST", body: contractJson(selectedAttendeesInputSchema, { attendeeIds: ids, action }) },
+    ),
+    onSuccess: async ({ affectedCount }, { action, ids }) => {
+      if (action === "delete") {
+        const removed = new Set(ids);
+        setSavedImport((current) => current.filter((row) => !removed.has(row.id)));
+        setBulkCreated((current) => {
+          if (!current) return null;
+          const remaining = current.attendees.filter(({ attendee }) => !removed.has(attendee.id));
+          return remaining.length ? { count: remaining.length, attendees: remaining } : null;
+        });
+        setCreated((current) => current && removed.has(current.attendee.id) ? null : current);
+        setArchive(null);
+      }
+      setSelectedIds([]);
+      await refreshRows();
+      toast.success(`${affectedCount} attendees ${action === "delete" ? "deleted" : "reset"}.`);
+    },
+    onError: (error) => toast.error(error instanceof ApiError ? error.message : "Could not update the selected attendees."),
+  });
+  const clearing = clearAttendees.isPending || updateSelected.isPending;
   const canClear = eventQuery.data?.canClearAttendees !== false;
   const clearDisabled = !canClear || clearing || addAttendee.isPending || addBulk.isPending || issueQr.isPending || downloadingBulk || Boolean(downloadingBadgeId);
   const confirmClear = () => {
@@ -136,6 +162,13 @@ function EventAttendees({ eventId }: { eventId: string }) {
     if (window.confirm(`Permanently clear all attendees from ${eventName}? This removes their check-in history and invalidates their QR codes.`)) {
       clearAttendees.mutate();
     }
+  };
+  const confirmSelected = (action: "delete" | "reset") => {
+    if (clearDisabled || !selectedIds.length) return;
+    const message = action === "delete"
+      ? `Permanently delete the ${selectedIds.length} selected attendees and their check-in history? Their QR codes will stop working.`
+      : `Reset attendance for the ${selectedIds.length} selected attendees? Their check-in and check-out history will be removed, and they can scan again using their existing QR codes.`;
+    if (window.confirm(message)) updateSelected.mutate({ action, ids: [...selectedIds] });
   };
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -235,6 +268,7 @@ function EventAttendees({ eventId }: { eventId: string }) {
   const rows = attendees.data ?? [];
   const badgeReady = rows.filter((attendee) => attendee.qrIssued !== false);
   const archivePreview = archive && badgeArchiveFilenames(archive.attendees.slice(0, 1), [archive.primary, archive.secondary].filter(Boolean))[0];
+  const allShownSelected = rows.length > 0 && rows.every((row) => selectedIds.includes(row.id));
   const missingQrIds = rows.filter((attendee) => attendee.qrIssued === false).map((attendee) => attendee.id);
   const standardColumns = [
     { label: "Name", field: "name" },
@@ -307,6 +341,12 @@ function EventAttendees({ eventId }: { eventId: string }) {
         </form>
       </CardContent>
     </Card>}
+    {selectedIds.length > 0 && <Card className="mb-4"><CardContent className="flex flex-wrap items-center gap-3 p-4">
+      <span className="mr-auto text-sm font-semibold">{selectedIds.length} selected</span>
+      <Button size="sm" variant="outline" disabled={clearDisabled} onClick={() => confirmSelected("reset")}><RotateCcw className="h-4 w-4" />Reset selected attendance</Button>
+      <Button size="sm" variant="destructive" disabled={clearDisabled} onClick={() => confirmSelected("delete")}><Trash2 className="h-4 w-4" />Delete selected</Button>
+      <Button size="sm" variant="ghost" disabled={clearing} onClick={() => setSelectedIds([])}>Deselect</Button>
+    </CardContent></Card>}
     {showForm && <Card className="mb-4"><CardContent className="p-5"><div className="mb-4 flex items-center justify-between"><div><h2 className="panel-title">New attendee</h2><p className="mt-1 text-xs text-muted-foreground">A unique, private QR token will be generated once.</p></div><button aria-label="Close form" onClick={() => setShowForm(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button></div><form className="space-y-3" onSubmit={submit}><div className="grid gap-3 md:grid-cols-4"><input className="input-control" required maxLength={160} placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} /><input className="input-control" type="email" maxLength={320} placeholder="Email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} /><input className="input-control" maxLength={80} placeholder="Ticket type" value={ticketType} onChange={(e) => setTicketType(e.target.value)} /><Button disabled={addAttendee.isPending || clearing}>{addAttendee.isPending ? "Creating QR…" : "Create attendee & QR"}</Button></div>{customFields.map((field, index) => <div key={field.id} className="grid gap-2 sm:grid-cols-[1fr_1.5fr_auto]"><input className="input-control" maxLength={50} placeholder="Field name (e.g. Company)" aria-label={`Custom field ${index + 1} name`} value={field.key} onChange={(e) => setCustomFields((current) => current.map((item) => item.id === field.id ? { ...item, key: e.target.value } : item))} /><input className="input-control" maxLength={1000} placeholder="Field value" aria-label={`Custom field ${index + 1} value`} value={field.value} onChange={(e) => setCustomFields((current) => current.map((item) => item.id === field.id ? { ...item, value: e.target.value } : item))} /><button type="button" aria-label={`Remove custom field ${index + 1}`} onClick={() => setCustomFields((current) => current.filter((item) => item.id !== field.id))} className="grid h-10 w-10 place-items-center rounded-lg border border-border text-muted-foreground hover:bg-rose-50 hover:text-destructive"><X className="h-4 w-4" /></button></div>)}<div className="flex flex-wrap items-center justify-between gap-2"><Button type="button" size="sm" variant="outline" disabled={customFields.length >= 30} onClick={() => setCustomFields((current) => [...current, { id: crypto.randomUUID(), key: "", value: "" }])}><Plus className="h-4 w-4" />Add custom field</Button><span className="text-[10px] text-muted-foreground">Custom fields can be selected in the badge designer.</span></div></form></CardContent></Card>}
     {showBulk && <Card className="mb-4">
       <CardContent className="space-y-4 p-5">
@@ -348,11 +388,17 @@ function EventAttendees({ eventId }: { eventId: string }) {
     </Card>}
     {created && <div className="mb-4 rounded-2xl border border-primary/20 bg-blue-50/60 p-4"><div className="flex flex-col gap-4 sm:flex-row sm:items-center"><img src={created.qrDataUrl} alt={`QR code for ${created.attendee.name}`} className="h-28 w-28 rounded-xl border border-border bg-white p-2" /><div className="flex-1"><p className="label-caps text-primary">QR issued / {created.attendee.ticketType}</p><h3 className="mt-1 font-display text-xl font-semibold">{created.attendee.name}</h3><p className="mt-1 text-sm text-muted-foreground">The scanner credential is encrypted at rest; only its one-way hash is used for lookup.</p><div className="mt-3 flex flex-wrap gap-2"><a className="inline-flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" href={created.qrDataUrl} download={`eventdesk-${attendeeFilename(created.attendee)}-qr.png`}><ArrowDownToLine className="h-4 w-4" />QR image only</a><Button size="sm" variant="outline" disabled={Boolean(downloadingBadgeId) || clearing} onClick={() => void downloadBadge(created.attendee)}><FileText className="h-4 w-4" />Download designed badge PDF</Button></div></div><button aria-label="Close QR result" onClick={() => setCreated(null)} className="self-start text-muted-foreground"><X className="h-4 w-4" /></button></div></div>}
     {bulkCreated && <Card className="mb-4"><CardContent className="p-4"><div className="mb-3 flex items-start justify-between gap-4"><div><p className="label-caps text-primary">Bulk QR issue complete</p><h2 className="mt-1 font-display text-lg font-semibold">{bulkCreated.count} QR codes ready</h2><p className="mt-1 text-xs text-muted-foreground">Choose QR image only or download each attendee’s saved badge design.</p></div><div className="flex items-center gap-3"><Button size="sm" variant="outline" disabled={downloadingBulk || clearing} onClick={() => setArchive(badgeArchiveSelection(bulkCreated.attendees.map(({ attendee }) => attendee)))}><FileArchive className="h-4 w-4" />Badges ZIP</Button><button aria-label="Close bulk QR results" onClick={() => setBulkCreated(null)} className="text-muted-foreground"><X className="h-4 w-4" /></button></div></div><div className="max-h-72 divide-y divide-border overflow-y-auto rounded-xl border border-border">{bulkCreated.attendees.map((item) => <div key={item.attendee.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2"><div className="min-w-0"><p className="truncate text-xs font-semibold">{item.attendee.name || Object.values(item.attendee.customFields).find(Boolean) || item.attendee.email || "Attendee"}</p><p className="text-[10px] text-muted-foreground">{item.attendee.ticketType}{item.attendee.email ? ` · ${item.attendee.email}` : ""}</p></div><div className="flex shrink-0 items-center gap-3"><a className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary" href={item.qrDataUrl} download={`eventdesk-${attendeeFilename(item.attendee)}-qr.png`}><ArrowDownToLine className="h-3.5 w-3.5" />QR only</a><button className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary disabled:opacity-50" disabled={Boolean(downloadingBadgeId) || clearing} onClick={() => void downloadBadge(item.attendee)}><FileText className="h-3.5 w-3.5" />Badge PDF</button></div></div>)}</div></CardContent></Card>}
-    <Card><CardContent className="p-0"><div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row"><label className="relative flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><input className="input-control pl-9" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search attendee data" /></label><select className="input-control sm:w-48" value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">All attendees</option><option value="pending">Not checked in</option><option value="checked-in">Checked in</option></select></div>
+    <Card><CardContent className="p-0"><div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row"><label className="relative flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><input className="input-control pl-9" value={q} disabled={clearing} onChange={(e) => { setQ(e.target.value); setSelectedIds([]); }} placeholder="Search attendee data" /></label><select className="input-control sm:w-48" value={status} disabled={clearing} onChange={(e) => { setStatus(e.target.value); setSelectedIds([]); }}><option value="all">All attendees</option><option value="pending">Not checked in</option><option value="checked-in">Checked in</option></select></div>
       {attendees.isLoading ? <p className="p-8 text-center text-sm text-muted-foreground">Loading attendees…</p> : attendees.isError ? <p className="p-8 text-center text-sm text-destructive">Could not load attendee records.</p> : rows.length ? <div className="overflow-x-auto">
         <table className="w-full text-left">
-          <thead className="bg-muted/50"><tr>{[...columns.map(({ label }) => label), "Status", "Checked in", "Badge"].map((label, index) => <th key={index} scope="col" className="whitespace-nowrap px-5 py-3 text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">{label}</th>)}</tr></thead>
+          <thead className="bg-muted/50"><tr><th className="w-12 px-4 py-3">
+            <input type="checkbox" aria-label="Select all shown attendees" checked={allShownSelected} disabled={clearing || !canClear} onChange={(event) => setSelectedIds(event.target.checked ? rows.map(({ id }) => id) : [])} />
+          </th>{[...columns.map(({ label }) => label), "Status", "Checked in", "Badge"].map((label, index) => <th key={index} scope="col" className="whitespace-nowrap px-5 py-3 text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">{label}</th>)}</tr></thead>
           <tbody className="divide-y divide-border">{rows.map((attendee) => <tr key={attendee.id} className="hover:bg-muted/30">
+            <td className="px-4 py-3.5"><input type="checkbox" aria-label={`Select ${attendee.name || attendee.email || attendee.id}`} checked={selectedIds.includes(attendee.id)} disabled={clearing || !canClear} onChange={(event) => {
+              const checked = event.target.checked;
+              setSelectedIds((current) => checked ? [...current, attendee.id] : current.filter((id) => id !== attendee.id));
+            }} /></td>
             {columns.map(({ label, value }, index) => <td key={index} className="max-w-64 break-words px-5 py-3.5 text-xs" aria-label={label}>{value(attendee)}</td>)}
             <td className="whitespace-nowrap px-5 py-3.5">{attendee.checkedInAt ? <Badge tone="success"><Check className="mr-1 h-3 w-3" />Checked in</Badge> : <Badge tone="warning">Expected</Badge>}</td>
             <td className="whitespace-nowrap px-5 py-3.5 font-mono text-[11px] text-muted-foreground">{attendee.checkedInAt ? new Date(attendee.checkedInAt).toLocaleString() : "—"}</td>

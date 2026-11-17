@@ -47,6 +47,10 @@ export const badgeFilenameFieldSchema = z.enum(["id", "name", "email", "ticketTy
 export const badgeArchiveInputSchema = attendeeQrIssueSchema.extend({
   filenameFields: z.array(badgeFilenameFieldSchema).min(1).max(2),
 });
+export const selectedAttendeesInputSchema = attendeeQrIssueSchema.extend({
+  action: z.enum(["delete", "reset"]),
+});
+export const selectedAttendeesResultSchema = z.object({ affectedCount: z.number().int().min(1).max(500) }).strict();
 export type ImportedAttendee = z.infer<typeof importedAttendeeSchema>;
 export const scanDirectionSchema = z.enum(["in", "out", "auto"]);
 export const checkInInputSchema = z.object({

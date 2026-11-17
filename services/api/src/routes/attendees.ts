@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import QRCode from "qrcode";
-import { attendeeFieldListSchema, attendeeImportSchema, attendeeInputSchema, attendeeListSchema, attendeeQrIssueSchema, bulkAttendeeInputSchema, bulkAttendeeResultSchema, clearAttendeesResultSchema, issuedAttendeeSchema, qrDataResponseSchema } from "@eventdesk/contracts";
+import { attendeeFieldListSchema, attendeeImportSchema, attendeeInputSchema, attendeeListSchema, attendeeQrIssueSchema, bulkAttendeeInputSchema, bulkAttendeeResultSchema, clearAttendeesResultSchema, selectedAttendeesInputSchema, selectedAttendeesResultSchema, issuedAttendeeSchema, qrDataResponseSchema } from "@eventdesk/contracts";
 import type { AttendeeInput } from "@eventdesk/contracts";
 import { pool } from "../db/pool.js";
 import { eventTableNames, projectSchemaName } from "../db/tenant-identifiers.js";
@@ -77,6 +77,48 @@ router.delete("/:eventId/attendees", async (req, res, next) => {
     // The check-in table's foreign key removes check-ins alongside their attendees.
     const result = await pool.query(`DELETE FROM ${schema}.${attendees}`);
     return sendJson(res, clearAttendeesResultSchema, { deletedCount: result.rowCount ?? 0 });
+  } catch (error) { next(error); }
+});
+
+
+router.post("/:eventId/attendees/selected", async (req, res, next) => {
+  if (!requireUuid(req.params.eventId)) { res.status(400).json({ error: "Invalid event ID." }); return; }
+  const parsed = selectedAttendeesInputSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Select between 1 and 500 attendees and a valid action." }); return; }
+  try {
+    const event = await findEventForOrganizer(req.params.eventId, organizerId(req));
+    if (!event) { res.status(404).json({ error: "Event not found." }); return; }
+    if (event.membership_role !== "owner") { res.status(403).json({ error: "Only the event owner can delete or reset attendees." }); return; }
+    if (event.schema_name !== projectSchemaName(event.project_id) || event.attendee_table_name !== eventTableNames(event.id).attendees || event.checkin_table_name !== eventTableNames(event.id).checkins) {
+      throw new Error("Unsafe attendee table mapping.");
+    }
+    const ids = [...new Set(parsed.data.attendeeIds.map((id) => id.toLowerCase()))];
+    const { schema, attendees, checkins } = tenantSqlNames(event);
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const found = await client.query<{ id: string }>(
+        `SELECT id FROM ${schema}.${attendees} WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE`, [ids],
+      );
+      if (found.rows.length !== ids.length) {
+        await client.query("ROLLBACK");
+        res.status(404).json({ error: "Some selected attendees could not be found. Refresh the list and try again." });
+        return;
+      }
+      if (parsed.data.action === "delete") {
+        await client.query(`DELETE FROM ${schema}.${attendees} WHERE id=ANY($1::uuid[])`, [ids]);
+      } else {
+        await client.query(`DELETE FROM ${schema}.${checkins} WHERE attendee_id=ANY($1::uuid[])`, [ids]);
+        await client.query(
+          `UPDATE ${schema}.${attendees} SET checked_in_at=NULL, checked_out_at=NULL, last_direction=NULL, scan_count=0 WHERE id=ANY($1::uuid[])`, [ids],
+        );
+      }
+      await client.query("COMMIT");
+      return sendJson(res, selectedAttendeesResultSchema, { affectedCount: ids.length });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally { client.release(); }
   } catch (error) { next(error); }
 });
 
