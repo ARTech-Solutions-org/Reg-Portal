@@ -262,6 +262,7 @@ function ScannerDesk() {
   } as CSSProperties;
 
   const logos = scannerLogoDataUrls(branding);
+  const brandMatchesEvent = branding.brandName.replace(/\s+/g, "").toLowerCase() === session?.eventName.replace(/\s+/g, "").toLowerCase();
 
   return (
     <main className="safe-area scanner-theme min-h-screen px-4 pb-8 pt-5 sm:px-6" style={themeStyle}>
@@ -291,7 +292,7 @@ function ScannerDesk() {
               ))}
             </div>
             <div className="min-w-0">
-              <p className="truncate font-display text-sm font-bold tracking-[.12em]">{branding.brandName}</p>
+              {!brandMatchesEvent && <p className="truncate font-display text-sm font-bold tracking-[.12em]">{branding.brandName}</p>}
               {branding.brandTagline && (
                 <p className="scanner-muted mt-1 truncate font-mono text-[9px] uppercase tracking-[.15em]">
                   {branding.brandTagline}
@@ -310,26 +311,10 @@ function ScannerDesk() {
             <span className="scanner-accent font-mono text-[10px] uppercase tracking-[.18em]">
               Live Entrance Desk
             </span>
-            {session?.maxScansPerAttendee && (
-              <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] font-mono text-white/70">
-                Max Scans: {session.maxScansPerAttendee}
-              </span>
-            )}
           </div>
           <h1 className="mt-2 break-words font-display text-3xl font-semibold tracking-[-.04em] sm:text-4xl">
             {session?.eventName || "Welcome guests."}
           </h1>
-          <p className="scanner-muted scanner-wrap-anywhere mt-2 text-sm">
-            {session
-              ? `${session.label} · ${session.mode === "both"
-                ? "Choose Check-in or Check-out below"
-                : session.mode === "in"
-                ? "Scan guest QR codes to record check-in"
-                : session.mode === "out"
-                ? "Scan guest QR codes to record check-out"
-                : "Scan guest QR codes to automatically record arrival or departure"}`
-              : "Staff access uses the private scanner URL—no organizer login is needed."}
-          </p>
         </section>
 
         {sessionError ? (
@@ -349,35 +334,9 @@ function ScannerDesk() {
           </div>
         ) : (
           <>
-            {/* PROMINENT SCAN DIRECTION SELECTOR (CHECK-IN vs CHECK-OUT vs AUTO) */}
-            <section className="mb-4 rounded-2xl border border-white/15 bg-white/[0.04] p-3 sm:p-4 backdrop-blur-sm">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-white/50 block">
-                    Active Gate Action
-                  </span>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-sm font-bold text-white">
-                      {direction === "in"
-                        ? "Check-in (Entrance)"
-                        : direction === "out"
-                        ? "Check-out (Departure)"
-                        : "Auto (Toggle In / Out)"}
-                    </span>
-                    <span
-                      className={`inline-block h-2 w-2 rounded-full animate-pulse ${
-                        direction === "in"
-                          ? "bg-emerald-400 shadow-[0_0_8px_#34d399]"
-                          : direction === "out"
-                          ? "bg-sky-400 shadow-[0_0_8px_#38bdf8]"
-                          : "bg-purple-400 shadow-[0_0_8px_#c084fc]"
-                      }`}
-                    />
-                  </div>
-                </div>
-
-                {/* Single-tap buttons for gate staff */}
-                {session.mode === "both" && <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-white/10 bg-black/50 p-1">
+            {session.mode === "both" && (
+              <section className="mb-4" aria-label="Scan direction">
+                <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-white/10 bg-black/50 p-1">
                   <button
                     type="button"
                     onClick={() => setDirection("in")}
@@ -405,9 +364,9 @@ function ScannerDesk() {
                   </button>
 
 
-                </div>}
-              </div>
-            </section>
+                </div>
+              </section>
+            )}
 
             <section className="grid gap-4 lg:grid-cols-[1.2fr_.8fr]">
               <div className="overflow-hidden rounded-[24px] border border-white/10 bg-black shadow-2xl shadow-black/20">
@@ -644,20 +603,14 @@ function ScannerDesk() {
               </section>
             )}
 
-            <footer className="scanner-muted mt-7 flex flex-col gap-1.5 border-t border-white/10 pt-4 text-center text-[10px] sm:flex-row sm:items-center sm:justify-between sm:text-left">
-              <span className="scanner-wrap-anywhere min-w-0">Staff access · {session.label}</span>
-              <span className="font-mono">
-                {session.expiresAt
-                  ? `LINK ENDS ${new Date(session.expiresAt).toLocaleDateString()}`
-                  : "LINK DOES NOT EXPIRE"}
-              </span>
-            </footer>
           </>
         )}
-        <div className="scanner-muted mt-7 flex items-center justify-center gap-1.5 text-center text-[10px] opacity-70">
-          <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-          Event-scoped staff access · Scan records stored in the event database
-        </div>
+        <footer className="scanner-muted mt-7 flex items-center justify-center gap-2 border-t border-white/10 pt-4 text-xs">
+          <span>Powered by</span>
+          <span className="rounded-md bg-[#111722] px-2.5 py-1.5">
+            <img src="/scanner/powered-by-artech.png" alt="ARTECH" className="h-5 w-auto max-w-[140px] object-contain" />
+          </span>
+        </footer>
       </div>
     </main>
   );
