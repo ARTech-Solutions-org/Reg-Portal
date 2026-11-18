@@ -38,3 +38,12 @@ button { cursor: pointer; }
 .scan-feedback[data-status="valid"] { background: #047857; color: #ffffff; }
 .scan-feedback[data-status="duplicate"] { background: #fbbf24; color: #451a03; }
 .scan-feedback[data-status="invalid"] { background: #be123c; color: #ffffff; }
+
+.artech-credit {
+  display: inline-block;
+  width: 121px;
+  height: 20px;
+  background-color: var(--scanner-text, #f4f6fb);
+  -webkit-mask: url("/scanner/powered-by-artech.png") center / contain no-repeat;
+  mask: url("/scanner/powered-by-artech.png") center / contain no-repeat;
+}

@@ -13,7 +13,6 @@ import {
   LogIn,
   LogOut,
   ScanLine,
-  ShieldCheck,
   TriangleAlert,
   XCircle,
 } from "lucide-react";
@@ -300,10 +299,6 @@ function ScannerDesk() {
               )}
             </div>
           </div>
-          <div className="scanner-muted inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-transparent px-3 py-1.5 text-[10px] font-semibold">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-            Staff access
-          </div>
         </header>
 
         <section className="pb-4 pt-6 sm:pt-7">
@@ -528,6 +523,7 @@ function ScannerDesk() {
               </div>
             </section>
 
+            {branding.showManualEntry !== false && (
             <section className="scanner-panel mt-5 rounded-2xl border border-white/10 p-4 sm:p-5">
               <div className="mb-3 flex items-center gap-2">
                 <KeyRound className="scanner-accent h-4 w-4" />
@@ -565,6 +561,7 @@ function ScannerDesk() {
                 </button>
               </form>
             </section>
+            )}
 
             {recent.length > 0 && (
               <section className="mt-6">
@@ -607,9 +604,7 @@ function ScannerDesk() {
         )}
         <footer className="scanner-muted mt-7 flex items-center justify-center gap-2 border-t border-white/10 pt-4 text-xs">
           <span>Powered by</span>
-          <span className="rounded-md bg-[#111722] px-2.5 py-1.5">
-            <img src="/scanner/powered-by-artech.png" alt="ARTECH" className="h-5 w-auto max-w-[140px] object-contain" />
-          </span>
+          <span role="img" aria-label="ARTECH" className="artech-credit" />
         </footer>
       </div>
     </main>

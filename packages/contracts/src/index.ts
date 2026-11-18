@@ -106,6 +106,7 @@ export const scannerBrandingSchema = z.object({
   logoDataUrl: scannerLogoDataUrlSchema.nullable(),
   additionalLogoDataUrls: z.array(scannerLogoDataUrlSchema).max(maxScannerLogos - 1).optional(),
   logoSize: z.number().int().min(24).max(160).optional(),
+  showManualEntry: z.boolean().optional(),
   accentColor: z.string().regex(/^#[\da-fA-F]{6}$/),
   backgroundColor: z.string().regex(/^#[\da-fA-F]{6}$/),
   panelColor: z.string().regex(/^#[\da-fA-F]{6}$/),
